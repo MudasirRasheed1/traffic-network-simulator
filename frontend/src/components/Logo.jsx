@@ -141,7 +141,7 @@ export default function Logo({ size = 'medium', showText = true, subtitle = null
       {showText && (
         <div className={styles.brandTextWrapper}>
           <div className={styles.brandTitle}>
-            Traffic <span className={styles.highlight}>Simulator</span>
+            GreenWave <span className={styles.highlight}>Mobility</span>
           </div>
           {subtitle && <div className={styles.brandSubtitle}>{subtitle}</div>}
         </div>

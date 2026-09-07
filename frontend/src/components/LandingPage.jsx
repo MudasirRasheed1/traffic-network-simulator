@@ -412,7 +412,7 @@ export default function LandingPage() {
           <span style={{ color: '#334155' }}>•</span>
           <Link to="/contact" style={{ color: '#38bdf8', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Contact Us</Link>
         </div>
-        <p>© 2026 Traffic Simulator. Developed for Plaksha Advanced Traffic Research Systems.</p>
+        <p>© 2026 GreenWave Mobility. Developed for Plaksha Advanced Traffic Research Systems.</p>
       </footer>
     </div>
   );

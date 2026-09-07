@@ -1,0 +1,337 @@
+.configPanel {
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #1e293b;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.configPanel h2 {
+  color: #ffffff;
+  margin: 0 0 16px 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Custom Tabs styling */
+.tabRow {
+  display: flex;
+  background-color: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  padding: 2px;
+}
+
+.tabBtn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  text-align: center;
+  font-family: var(--font-display);
+}
+
+.tabBtn:hover {
+  color: #ffffff;
+  background-color: rgba(30, 41, 59, 0.5);
+}
+
+.activeTab {
+  color: #60a5fa;
+  background-color: #0f172a;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.configGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldGroup label {
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fieldGroup input,
+.fieldGroup select,
+.roadField select,
+.roadField input {
+  background: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  color: #f8fafc;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.fieldGroup input:focus,
+.fieldGroup select:focus,
+.roadField select:focus,
+.roadField input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+/* Custom dropdown selects (Hiding default browser arrows) */
+.fieldGroup select,
+.roadField select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 18px;
+  padding-right: 32px !important;
+  cursor: pointer;
+}
+
+.sectionTitle {
+  color: #f8fafc;
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  margin: 18px 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.computedValue {
+  background: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  color: #cbd5e1;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+/* Road overrides items */
+.roadList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.roadItem {
+  background: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roadLabel {
+  color: #f8fafc;
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+
+.roadSubTitle {
+  font-size: 0.82rem;
+  color: #38bdf8;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 14px;
+  margin-bottom: 4px;
+}
+
+.roadFields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.roadField {
+  flex: 1;
+  min-width: 75px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roadField span {
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.roadField input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.88rem;
+  background: #090d16;
+  border: 1px solid #334155;
+  color: #ffffff;
+}
+
+.roadField select {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.88rem;
+  background: #090d16;
+  border: 1px solid #334155;
+  color: #ffffff;
+  background-position: right 6px center;
+  background-size: 16px;
+  padding-right: 24px !important;
+}
+
+/* Accordion sections */
+.collapsible {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.collapsible::after {
+  content: '+';
+  color: #60a5fa;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-top: 10px;
+  transition: transform 0.2s;
+}
+
+.collapsible.open::after {
+  content: '-';
+}
+
+.advancedSection {
+  display: none;
+}
+
+.advancedSection.open {
+  display: block;
+}
+
+/* Simulator Bottom controls */
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #1e293b;
+}
+
+.btn {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnStart {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.btnStart:hover {
+  background: #059669;
+}
+
+.btnPause {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.btnPause:hover {
+  background: #d97706;
+}
+
+.btnReset {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.btnReset:hover {
+  background: #dc2626;
+}
+
+.btnStep {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.btnStep:hover {
+  background: #2563eb;
+}
+
+.btnSave {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+}
+
+.btnSave:hover {
+  background: rgba(59, 130, 246, 0.25);
+  color: #ffffff;
+}
+
+.speedControl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.speedControl label {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.speedControl input[type="range"] {
+  flex: 1;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.speedControl span {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-family: monospace;
+}

@@ -1,0 +1,335 @@
+.dashboard {
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #1e293b;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+.dashboard h2 {
+  color: #ffffff;
+  margin: 0 0 16px 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.noData {
+  color: #64748b;
+  font-size: 0.85rem;
+  padding: 24px 0;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Custom Tabs styling */
+.tabRow {
+  display: flex;
+  background-color: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  padding: 2px;
+}
+
+.tabBtn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  text-align: center;
+  font-family: var(--font-display);
+}
+
+.tabBtn:hover {
+  color: #ffffff;
+  background-color: rgba(30, 41, 59, 0.4);
+}
+
+.activeTab {
+  color: #60a5fa;
+  background-color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Export button container */
+.exportContainer {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.exportBtn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: #0b0f19;
+  color: #f8fafc;
+  border: 1px solid #1e293b;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+
+.exportBtn:hover {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+/* Live KPI Cards Row */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.statCard {
+  background: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+.statLabel {
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.statCompare {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.statValue {
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.statValueRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.statTiny {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.statSep {
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.fixed {
+  color: #fbbf24;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.25);
+}
+
+.greedy {
+  color: #34d399;
+  text-shadow: 0 0 10px rgba(52, 211, 153, 0.25);
+}
+
+/* Live Queues Section */
+.liveTopSection {
+  background: #0b0f19;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #1e293b;
+}
+
+.liveTopSection h2 {
+  color: #f8fafc;
+  margin: 0 0 10px 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-family: var(--font-display);
+}
+
+.liveHint {
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.liveChartWrapper {
+  height: 240px;
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.liveChartScroller {
+  height: 100%;
+  min-height: 100%;
+}
+
+/* Win/Loss Heatmap card */
+.heatmapSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 10px 0 14px 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.heatGreedy {
+  color: #34d399;
+}
+
+.heatFixed {
+  color: #fbbf24;
+}
+
+.heatTie {
+  color: #cbd5e1;
+}
+
+.heatTotal {
+  color: #94a3b8;
+}
+
+.heatmapGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.heatCell {
+  padding: 8px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.heatCellGreedy {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.heatCellFixed {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+.heatCellTie {
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.heatCellKey {
+  font-family: monospace;
+  margin-bottom: 2px;
+  font-size: 0.8rem;
+}
+
+.heatCellVals {
+  font-size: 0.65rem;
+  color: #64748b;
+}
+
+/* Charts Grid standardizer */
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .chartsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartCard {
+  background: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chartCard h3 {
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.chartWrapper {
+  height: 200px;
+  position: relative;
+}
+
+.chartWrapperCompact {
+  height: 160px;
+  position: relative;
+}
+
+.chartWrapperTall {
+  height: 240px;
+  position: relative;
+}
+
+/* Dropdown styling */
+.chartCard select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #0b0f19;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  color: #e2e8f0;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 6px 28px 6px 8px !important;
+  font-size: 0.8rem;
+  outline: none;
+  cursor: pointer;
+  max-width: 100% !important;
+}
+
+.chartCard select:focus {
+  border-color: #3b82f6;
+}

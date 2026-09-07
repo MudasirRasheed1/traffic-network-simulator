@@ -1,0 +1,336 @@
+{
+  "generatedAt": "2026-04-23T06:36:51.149Z",
+  "baseline": {
+    "gridSize": 5,
+    "simDuration": 500,
+    "defaultRoadSpeed": 2,
+    "defaultRoadLength": 12,
+    "defaultTurnProbT": 0.7,
+    "defaultTurnProbR": 0.15,
+    "defaultTurnProbL": 0.15,
+    "fixedCycleInterval": 5,
+    "greedyDecisionInterval": 5,
+    "lookaheadH": 5,
+    "alpha": 1,
+    "beta": 1,
+    "gamma": 1,
+    "totalWaitWeight": 1,
+    "totalWaitStdWeight": 1,
+    "queueWeight": 1,
+    "queueStdWeight": 1,
+    "baseDepartureRate": 8,
+    "inflowGlobalCap": 60,
+    "seed": 2
+  },
+  "minPointsPerFactor": 20,
+  "plotMinSims": 20,
+  "arrivalUniformMin": 0,
+  "regimeBaselineArrivalMax": {
+    "arrivals_lt_departures": 10,
+    "arrivals_eq_departures": 16,
+    "arrivals_gt_departures": 40
+  },
+  "regimeBaselineDepartureRate": {
+    "arrivals_lt_departures": 8,
+    "arrivals_eq_departures": 8,
+    "arrivals_gt_departures": 8
+  },
+  "regimes": [
+    "arrivals_gt_departures"
+  ],
+  "boundaryNodeCount": 16,
+  "cornerBoundaryNodeCount": 4,
+  "edgeBoundaryNodeCount": 12,
+  "boundaryStreamCount": 20,
+  "factorPointPlan": [
+    {
+      "key": "arrivalUniformMax",
+      "points": 20,
+      "min": 0,
+      "max": 40
+    },
+    {
+      "key": "throughTurnProb",
+      "points": 20,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "leftTurnProb",
+      "points": 20,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "rightTurnProb",
+      "points": 20,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "defaultRoadSpeed",
+      "points": 20,
+      "min": 1,
+      "max": 20
+    },
+    {
+      "key": "defaultRoadLength",
+      "points": 30,
+      "min": 2,
+      "max": 100
+    },
+    {
+      "key": "fixedCycleInterval",
+      "points": 20,
+      "min": 1,
+      "max": 30
+    },
+    {
+      "key": "greedyDecisionInterval",
+      "points": 20,
+      "min": 1,
+      "max": 30
+    },
+    {
+      "key": "lookaheadH",
+      "points": 20,
+      "min": 1,
+      "max": 20
+    },
+    {
+      "key": "totalWaitWeight",
+      "points": 20,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "key": "totalWaitStdWeight",
+      "points": 20,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "key": "queueWeight",
+      "points": 20,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "key": "queueStdWeight",
+      "points": 20,
+      "min": 0,
+      "max": 20
+    }
+  ],
+  "effectiveFactorPlanByRegime": {
+    "arrivals_gt_departures": [
+      {
+        "factorKey": "arrivalUniformMax",
+        "label": "Uniform Arrival Max (veh/step/boundary stream)",
+        "plotEnabled": false,
+        "nominalPoints": 20,
+        "effectivePoints": 1,
+        "effectiveMin": 40,
+        "effectiveMax": 40,
+        "simCount": 1,
+        "requiredSimsToPlot": 1
+      },
+      {
+        "factorKey": "throughTurnProb",
+        "label": "Through Turn Probability (T)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "leftTurnProb",
+        "label": "Left Turn Probability (L)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "rightTurnProb",
+        "label": "Right Turn Probability (R)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadSpeed",
+        "label": "Default Road Speed (cells/step)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadLength",
+        "label": "Default Road Length (cells)",
+        "plotEnabled": true,
+        "nominalPoints": 30,
+        "effectivePoints": 30,
+        "effectiveMin": 2,
+        "effectiveMax": 100,
+        "simCount": 30,
+        "requiredSimsToPlot": 30
+      },
+      {
+        "factorKey": "fixedCycleInterval",
+        "label": "Fixed Cycle Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "greedyDecisionInterval",
+        "label": "Greedy Decision Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "lookaheadH",
+        "label": "Greedy Lookahead Horizon H (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitWeight",
+        "label": "Total Wait Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitStdWeight",
+        "label": "Total Wait Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueWeight",
+        "label": "Queue Size Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueStdWeight",
+        "label": "Queue Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 20,
+        "requiredSimsToPlot": 20
+      }
+    ]
+  },
+  "seedsPerPoint": 1,
+  "factorCount": 13,
+  "metricCount": 7,
+  "runCount": 251,
+  "metricRows": 1757,
+  "outputRoot": "C:\\Users\\mudas\\OneDrive\\Documents\\Desktop\\Plaksha\\Plaksha-Sem-6\\ILGC\\ILGC\\simulator\\analysis\\ofat_sensitivity",
+  "regimesDescription": {
+    "arrivals_lt_departures": "Sum of expected arrivals per step is less than sum of expected departures per step.",
+    "arrivals_eq_departures": "Sum of expected arrivals per step equals sum of expected departures per step.",
+    "arrivals_gt_departures": "Sum of expected arrivals per step is greater than sum of expected departures per step."
+  },
+  "formulas": {
+    "boundaryNodeCount": "4*gridSize - 4",
+    "boundaryStreamCount": "sum of exposed boundary directions over all boundary nodes (for gridSize=5: corners=4 with 2 streams each, edge nodes=12 with 1 stream each, total=20)",
+    "arrivalsPerStep": "boundaryStreamCount * ((arrivalMin + arrivalMax)/2)",
+    "departuresPerStep": "boundaryStreamCount * baseDepartureRate",
+    "regimeComparison": "compare arrivalsPerStep and departuresPerStep to assign lt / eq / gt",
+    "forArrivalMinZero": "arrivalsPerStep = boundaryStreamCount*(arrivalMax/2)",
+    "ltConditionArrivalMax": "arrivalMax < 2*baseDepartureRate",
+    "eqConditionArrivalMax": "arrivalMax = 2*baseDepartureRate",
+    "gtConditionArrivalMax": "arrivalMax > 2*baseDepartureRate"
+  },
+  "baselineValuesForComparison": {
+    "gridSize": 5,
+    "baseDepartureRate": 8,
+    "boundaryStreamCount": 20,
+    "departuresPerStep": 160,
+    "equalityArrivalMaxWhenMinZero": 16
+  },
+  "regimeResolvedConditions": {
+    "arrivals_gt_departures": {
+      "targetRegime": "arrivals_gt_departures",
+      "resolvedArrivalMin": 0,
+      "resolvedArrivalMax": 40,
+      "resolvedDepartureRatePerBoundaryPipe": 8,
+      "boundaryStreamCount": 20,
+      "arrivalsPerStep": 400,
+      "departuresPerStep": 160,
+      "classificationCheck": "arrivals_gt_departures",
+      "classificationMatchesTarget": true
+    }
+  },
+  "seedPolicy": {
+    "seedsPerPoint": 1,
+    "seedRunsDescription": "Each point is simulated seed-runs times; runSeed = baseSeed + seedRep.",
+    "baseSeed": 2,
+    "runSeedFormula": "runSeed = baseSeed + seedRep",
+    "inflowSeedOffsetFormula": "inflowSeedOffset = seedRep * 101"
+  },
+  "notes": [
+    "Arrival min is fixed to 0 for all runs as requested.",
+    "Arrivals are sampled from a discrete uniform distribution per boundary pipe using the regime-specific [arrivalMin, arrivalMax].",
+    "Arrival max is swept only for arrivalUniformMax factor; all other factors use regime baseline arrival max.",
+    "Runs are generated separately for each regime so all three regime plot folders are populated.",
+    "Each regime uses one fixed resolved arrival/departure setup for all runs in that regime.",
+    "Regime fixed values and computed sums are recorded under regimeResolvedConditions for verification.",
+    "Arrival and departure comparisons are based on boundary streams, not total node count.",
+    "With gridSize=5 and baseDepartureRate=8: boundaryStreamCount=20 and departuresPerStep=160.",
+    "With arrival min=0 and departureRate=8, equality is at arrival max=16; below is lt and above is gt.",
+    "Through turn probability factor enforces Left = Right = (1 - Through)/2.",
+    "Left turn probability factor enforces Through = Right = (1 - Left)/2.",
+    "Right turn probability factor enforces Through = Left = (1 - Right)/2.",
+    "Partial CSVs and factor plots are written during the run so outputs appear before completion."
+  ]
+}

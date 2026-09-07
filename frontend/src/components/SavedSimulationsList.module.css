@@ -1,0 +1,240 @@
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  backdrop-filter: blur(6px);
+  font-family: var(--font-sans);
+}
+
+.modalCard {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #1e293b;
+  background-color: #0b0f19;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #f8fafc;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.closeBtn:hover {
+  color: #ffffff;
+}
+
+.modalBody {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  background-color: #0f172a;
+}
+
+.statusMsg {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  padding: 20px 0;
+  font-family: var(--font-mono);
+}
+
+.errorMsg {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.emptyMsg {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  padding: 40px 0;
+  border: 1px dashed #334155;
+  border-radius: 8px;
+}
+
+.runsList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.runItem {
+  background-color: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  transition: border-color 0.2s;
+}
+
+.runItem:hover {
+  border-color: #334155;
+}
+
+.runMainInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.runMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.runName {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: var(--font-display);
+}
+
+.runDate {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+}
+
+.runDesc {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.metricsSummary {
+  margin-top: 8px;
+  background-color: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.metricsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.metricsTable th, 
+.metricsTable td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e293b;
+  color: #cbd5e1;
+}
+
+.metricsTable th {
+  background-color: #0f172a;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-family: var(--font-display);
+  letter-spacing: 0.05em;
+}
+
+.metricsTable td {
+  font-family: var(--font-mono);
+}
+
+.fixedCell {
+  color: #e2e8f0 !important;
+  font-weight: 600;
+}
+
+.greedyCell {
+  color: #38bdf8 !important;
+  font-weight: 700;
+}
+
+.runActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 140px;
+}
+
+.loadBtn {
+  background-color: #2563eb;
+  border: 1px solid #38bdf8;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.loadBtn:hover {
+  background-color: #1d4ed8;
+}
+
+.deleteBtn {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.deleteBtn:hover {
+  background-color: #dc2626;
+  color: #ffffff;
+  border-color: #ef4444;
+}

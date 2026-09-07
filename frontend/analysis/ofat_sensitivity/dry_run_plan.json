@@ -1,0 +1,536 @@
+{
+  "mode": "dry-run",
+  "factors": 13,
+  "regimes": [
+    "arrivals_lt_departures",
+    "arrivals_eq_departures",
+    "arrivals_gt_departures"
+  ],
+  "seedsPerPoint": 2,
+  "plotMinSims": 20,
+  "totalSimulationRuns": 1506,
+  "factorPointPlan": [
+    {
+      "key": "arrivalUniformMax",
+      "points": 20
+    },
+    {
+      "key": "throughTurnProb",
+      "points": 20
+    },
+    {
+      "key": "leftTurnProb",
+      "points": 20
+    },
+    {
+      "key": "rightTurnProb",
+      "points": 20
+    },
+    {
+      "key": "defaultRoadSpeed",
+      "points": 20
+    },
+    {
+      "key": "defaultRoadLength",
+      "points": 30
+    },
+    {
+      "key": "fixedCycleInterval",
+      "points": 20
+    },
+    {
+      "key": "greedyDecisionInterval",
+      "points": 20
+    },
+    {
+      "key": "lookaheadH",
+      "points": 20
+    },
+    {
+      "key": "totalWaitWeight",
+      "points": 20
+    },
+    {
+      "key": "totalWaitStdWeight",
+      "points": 20
+    },
+    {
+      "key": "queueWeight",
+      "points": 20
+    },
+    {
+      "key": "queueStdWeight",
+      "points": 20
+    }
+  ],
+  "effectiveFactorPlanByRegime": {
+    "arrivals_lt_departures": [
+      {
+        "factorKey": "arrivalUniformMax",
+        "label": "Uniform Arrival Max (veh/step/boundary stream)",
+        "plotEnabled": false,
+        "nominalPoints": 20,
+        "effectivePoints": 1,
+        "effectiveMin": 10,
+        "effectiveMax": 10,
+        "simCount": 2,
+        "requiredSimsToPlot": 1
+      },
+      {
+        "factorKey": "throughTurnProb",
+        "label": "Through Turn Probability (T)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "leftTurnProb",
+        "label": "Left Turn Probability (L)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "rightTurnProb",
+        "label": "Right Turn Probability (R)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadSpeed",
+        "label": "Default Road Speed (cells/step)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadLength",
+        "label": "Default Road Length (cells)",
+        "plotEnabled": true,
+        "nominalPoints": 30,
+        "effectivePoints": 30,
+        "effectiveMin": 2,
+        "effectiveMax": 100,
+        "simCount": 60,
+        "requiredSimsToPlot": 30
+      },
+      {
+        "factorKey": "fixedCycleInterval",
+        "label": "Fixed Cycle Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "greedyDecisionInterval",
+        "label": "Greedy Decision Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "lookaheadH",
+        "label": "Greedy Lookahead Horizon H (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitWeight",
+        "label": "Total Wait Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitStdWeight",
+        "label": "Total Wait Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueWeight",
+        "label": "Queue Size Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueStdWeight",
+        "label": "Queue Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      }
+    ],
+    "arrivals_eq_departures": [
+      {
+        "factorKey": "arrivalUniformMax",
+        "label": "Uniform Arrival Max (veh/step/boundary stream)",
+        "plotEnabled": false,
+        "nominalPoints": 20,
+        "effectivePoints": 1,
+        "effectiveMin": 16,
+        "effectiveMax": 16,
+        "simCount": 2,
+        "requiredSimsToPlot": 1
+      },
+      {
+        "factorKey": "throughTurnProb",
+        "label": "Through Turn Probability (T)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "leftTurnProb",
+        "label": "Left Turn Probability (L)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "rightTurnProb",
+        "label": "Right Turn Probability (R)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadSpeed",
+        "label": "Default Road Speed (cells/step)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadLength",
+        "label": "Default Road Length (cells)",
+        "plotEnabled": true,
+        "nominalPoints": 30,
+        "effectivePoints": 30,
+        "effectiveMin": 2,
+        "effectiveMax": 100,
+        "simCount": 60,
+        "requiredSimsToPlot": 30
+      },
+      {
+        "factorKey": "fixedCycleInterval",
+        "label": "Fixed Cycle Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "greedyDecisionInterval",
+        "label": "Greedy Decision Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "lookaheadH",
+        "label": "Greedy Lookahead Horizon H (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitWeight",
+        "label": "Total Wait Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitStdWeight",
+        "label": "Total Wait Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueWeight",
+        "label": "Queue Size Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueStdWeight",
+        "label": "Queue Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      }
+    ],
+    "arrivals_gt_departures": [
+      {
+        "factorKey": "arrivalUniformMax",
+        "label": "Uniform Arrival Max (veh/step/boundary stream)",
+        "plotEnabled": false,
+        "nominalPoints": 20,
+        "effectivePoints": 1,
+        "effectiveMin": 24,
+        "effectiveMax": 24,
+        "simCount": 2,
+        "requiredSimsToPlot": 1
+      },
+      {
+        "factorKey": "throughTurnProb",
+        "label": "Through Turn Probability (T)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "leftTurnProb",
+        "label": "Left Turn Probability (L)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "rightTurnProb",
+        "label": "Right Turn Probability (R)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 1,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadSpeed",
+        "label": "Default Road Speed (cells/step)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "defaultRoadLength",
+        "label": "Default Road Length (cells)",
+        "plotEnabled": true,
+        "nominalPoints": 30,
+        "effectivePoints": 30,
+        "effectiveMin": 2,
+        "effectiveMax": 100,
+        "simCount": 60,
+        "requiredSimsToPlot": 30
+      },
+      {
+        "factorKey": "fixedCycleInterval",
+        "label": "Fixed Cycle Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "greedyDecisionInterval",
+        "label": "Greedy Decision Interval (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 30,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "lookaheadH",
+        "label": "Greedy Lookahead Horizon H (steps)",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 1,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitWeight",
+        "label": "Total Wait Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "totalWaitStdWeight",
+        "label": "Total Wait Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueWeight",
+        "label": "Queue Size Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      },
+      {
+        "factorKey": "queueStdWeight",
+        "label": "Queue Std Weight",
+        "plotEnabled": true,
+        "nominalPoints": 20,
+        "effectivePoints": 20,
+        "effectiveMin": 0,
+        "effectiveMax": 20,
+        "simCount": 40,
+        "requiredSimsToPlot": 20
+      }
+    ]
+  },
+  "baseline": {
+    "gridSize": 5,
+    "simDuration": 500,
+    "defaultRoadSpeed": 2,
+    "defaultRoadLength": 12,
+    "defaultTurnProbT": 0.7,
+    "defaultTurnProbR": 0.15,
+    "defaultTurnProbL": 0.15,
+    "fixedCycleInterval": 5,
+    "greedyDecisionInterval": 5,
+    "lookaheadH": 5,
+    "alpha": 1,
+    "beta": 1,
+    "gamma": 1,
+    "totalWaitWeight": 1,
+    "totalWaitStdWeight": 1,
+    "queueWeight": 1,
+    "queueStdWeight": 1,
+    "baseDepartureRate": 8,
+    "inflowGlobalCap": 60,
+    "seed": 2
+  },
+  "arrivalUniformMin": 0,
+  "regimeBaselineArrivalMax": {
+    "arrivals_lt_departures": 10,
+    "arrivals_eq_departures": 16,
+    "arrivals_gt_departures": 24
+  },
+  "regimeBaselineDepartureRate": {
+    "arrivals_lt_departures": 8,
+    "arrivals_eq_departures": 8,
+    "arrivals_gt_departures": 8
+  }
+}

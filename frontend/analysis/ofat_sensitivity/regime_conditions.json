@@ -1,0 +1,13 @@
+{
+  "arrivals_gt_departures": {
+    "targetRegime": "arrivals_gt_departures",
+    "resolvedArrivalMin": 0,
+    "resolvedArrivalMax": 40,
+    "resolvedDepartureRatePerBoundaryPipe": 8,
+    "boundaryStreamCount": 20,
+    "arrivalsPerStep": 400,
+    "departuresPerStep": 160,
+    "classificationCheck": "arrivals_gt_departures",
+    "classificationMatchesTarget": true
+  }
+}

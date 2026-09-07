@@ -347,6 +347,7 @@ export default function LandingPage() {
                   value={formData.username}
                   onChange={handleInputChange}
                   placeholder={isLogin ? "Enter username or email" : "Choose username"} 
+                  autoComplete="off"
                   required
                 />
               </div>
@@ -360,6 +361,7 @@ export default function LandingPage() {
                     value={formData.email}
                     onChange={handleInputChange}
                     placeholder="e.g. researcher@university.edu" 
+                    autoComplete="off"
                     required
                   />
                 </div>
@@ -373,6 +375,7 @@ export default function LandingPage() {
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="••••••••" 
+                  autoComplete={isLogin ? "current-password" : "new-password"}
                   required
                 />
               </div>

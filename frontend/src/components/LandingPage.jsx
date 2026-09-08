@@ -260,7 +260,7 @@ export default function LandingPage() {
       <main className={styles.heroSection}>
         <div className={styles.infoArea}>
           <div className={styles.badgeRow}>
-            <div className={styles.badge}>ENGINEERING PRODUCT</div>
+            <div className={styles.badge}>ADAPTIVE TRAFFIC INTELLIGENCE</div>
             <Link to="/demo" className={styles.liveDemoHeroBadge}>
               <span className={styles.liveDot}></span>
               <span>4 Live Benchmark Scenarios</span>

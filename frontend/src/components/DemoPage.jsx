@@ -67,7 +67,7 @@ const DEMO_SCENARIOS = [
     title: 'Time-Varying Traffic Waves & Dynamic Adaptation',
     badge: 'INFLOW AS A FUNCTION OF TIME',
     badgeColor: '#a78bfa',
-    scenarioDescription: 'Traffic volume continuously shifts throughout the day in undulating waves—peaking during rush-hour crests and dropping during off-peak intervals.',
+    scenarioDescription: 'Traffic volume continuously shifts throughout the day in undulating waves, peaking during rush-hour crests and dropping during off-peak intervals.',
     modelBenefit: 'We model traffic as a continuous wave function over time, and our policy dynamically adapts: it automatically expands green phase durations during peak wave crests and contracts them during troughs.',
     metric: 'Time-Variant Wave Tracking',
     parameters: [
@@ -211,7 +211,7 @@ const DEMO_SCENARIOS = [
     metric: 'Fully Configurable Network',
     parameters: [
       { label: 'Grid', value: '3 × 3 (9 Nodes)' },
-      { label: 'Inflow', value: '4 – 5 veh/s' },
+      { label: 'Inflow', value: '4 to 5 veh/s' },
       { label: 'Speed', value: '3 blocks/s' },
       { label: 'Turns', value: '60% Straight, 20% R, 20% L' },
       { label: 'Duration', value: '200s' }

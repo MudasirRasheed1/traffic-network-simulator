@@ -240,7 +240,7 @@ export default function ContactPage() {
                 </div>
                 <div className={styles.itemContent}>
                   <span className={styles.itemLabel}>Operating Hours</span>
-                  <span className={styles.itemValue}>Monday – Friday: 09:00 to 18:00 IST</span>
+                  <span className={styles.itemValue}>Monday to Friday: 09:00 to 18:00 IST</span>
                   <span className={styles.itemSubtext}>Response turnaround typically under 24 business hours</span>
                 </div>
               </div>

@@ -52,6 +52,12 @@
   line-height: 1.5;
 }
 
+/* Clickable logo navigates back to the Interactive Demos page */
+.logoLink {
+  text-decoration: none;
+  display: inline-flex;
+}
+
 /* Uniform Toolbar Controls Across Pages */
 .toolbar {
   display: inline-flex;

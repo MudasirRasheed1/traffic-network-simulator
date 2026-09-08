@@ -215,7 +215,12 @@ const DEMO_SCENARIOS = [
     metric: 'Fully Configurable Network',
     parameters: [
       { label: 'Grid Size', value: '3 × 3' },
-      { label: 'Inflow', value: 'North/East: 5 | South/West: 4' },
+      { label: 'Road Length', value: '16 units' },
+      { label: 'Road Speed', value: '3 units/step' },
+      { label: 'Boundary Inflows', value: 'N/E: 5 | S/W: 4' },
+      { label: 'Turn Split', value: '60% Straight | 20% Right | 20% Left' },
+      { label: 'Departure Rate', value: '3 veh/step' },
+      { label: 'Decision Interval', value: '5 steps' },
       { label: 'Duration', value: '200 steps' }
     ],
     configurator: (store) => {
@@ -229,6 +234,7 @@ const DEMO_SCENARIOS = [
         defaultTurnProbT: 0.6,
         defaultTurnProbR: 0.2,
         defaultTurnProbL: 0.2,
+        defaultDepartureRate: 3,
         defaultBoundaryInflowProfiles: {
           N: makeConstantInflowProfile(5),
           S: makeConstantInflowProfile(4),

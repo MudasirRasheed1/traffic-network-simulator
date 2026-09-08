@@ -209,9 +209,12 @@ export default function ContactPage() {
                   </svg>
                 </div>
                 <div className={styles.itemContent}>
-                  <span className={styles.itemLabel}>Primary Email</span>
-                  <a href="mailto:traffic-research@plaksha.edu.in" className={styles.itemValueLink}>
-                    traffic-research@plaksha.edu.in
+                  <span className={styles.itemLabel}>Primary Contacts</span>
+                  <a href="mailto:mudasir.rasheed.ug23@plaksha.edu.in" className={styles.itemValueLink}>
+                    mudasir.rasheed.ug23@plaksha.edu.in
+                  </a>
+                  <a href="mailto:mannan.sharma.ug23@plaksha.edu.in" className={styles.itemValueLink}>
+                    mannan.sharma.ug23@plaksha.edu.in
                   </a>
                 </div>
               </div>

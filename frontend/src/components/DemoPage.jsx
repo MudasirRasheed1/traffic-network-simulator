@@ -133,12 +133,12 @@ const DEMO_SCENARIOS = [
   {
     id: 'stochastic_bursts',
     num: 3,
-    title: 'Modeling Randomness in Simulation',
-    badge: 'RANDOMNESS IN SIMULATION',
+    title: 'Multi-Distribution Randomness & Stochastic Modeling',
+    badge: 'RANDOMNESS & PROBABILITY DISTRIBUTIONS',
     badgeColor: '#f59e0b',
-    scenarioDescription: 'We model real-world traffic randomness by providing input through a normal distribution with mean (μ = 4) and standard deviation (σ = 1.5).',
-    modelBenefit: 'Demonstrates our ability to model realistic traffic randomness using a normal distribution, showing how the adaptive algorithm continuously balances signal phases to prevent congestion build-ups.',
-    metric: 'Normal Distribution (μ=4, σ=1.5)',
+    scenarioDescription: 'We model real-world traffic randomness using multiple probability distributions and arrival methods. In this live demo, inflow randomness is modeled using a Normal distribution with mean (μ = 4) and standard deviation (σ = 1.5).',
+    modelBenefit: 'Demonstrates our ability to simulate realistic traffic randomness across multiple distributions, proving how our adaptive signal control dynamically balances green lights when stochastic arrival clusters occur.',
+    metric: 'Randomness Modeling (Demo: Normal μ=4, σ=1.5)',
     parameters: [
       { label: 'Grid Size', value: '3 × 3' },
       { label: 'Inflow', value: 'Normal Distribution (μ = 4, σ = 1.5)' },

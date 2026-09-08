@@ -21,10 +21,9 @@ const DEMO_SCENARIOS = [
     modelBenefit: 'Demonstrates that our control policy is fully adaptable: rather than adhering to rigid fixed cycles, it monitors live queues in real time, holding green lights where demand exists and skipping idle lanes to eliminate wasted green time.',
     metric: 'Dynamic Policy Adaptability',
     parameters: [
-      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
-      { label: 'Inflow', value: 'North 7 veh/s Surge' },
-      { label: 'Speed', value: '2 blocks/s' },
-      { label: 'Duration', value: '200s' }
+      { label: 'Grid Size', value: '3 × 3' },
+      { label: 'Inflow', value: 'North: 7 | S/E/W: 0' },
+      { label: 'Duration', value: '200 steps' }
     ],
     configurator: (store) => {
       store.updateConfig({
@@ -71,10 +70,9 @@ const DEMO_SCENARIOS = [
     modelBenefit: 'We model traffic as a continuous wave function over time, and our policy dynamically adapts: it automatically expands green phase durations during peak wave crests and contracts them during troughs.',
     metric: 'Time-Variant Wave Tracking',
     parameters: [
-      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
-      { label: 'Inflow', value: 'Wave Peaks (7 veh/s)' },
-      { label: 'Speed', value: '2 blocks/s' },
-      { label: 'Duration', value: '200s' }
+      { label: 'Grid Size', value: '3 × 3' },
+      { label: 'Inflow', value: 'Sinusoidal Wave' },
+      { label: 'Duration', value: '200 steps' }
     ],
     configurator: (store) => {
       const waveProfile = {
@@ -142,10 +140,9 @@ const DEMO_SCENARIOS = [
     modelBenefit: 'We model real-world random traffic arrivals. When an unexpected cluster of vehicles arrives, our algorithm detects the queue instantly and prioritizes green lights to clear the backlog before congestion spreads.',
     metric: 'Stochastic & Randomness Modeling',
     parameters: [
-      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
-      { label: 'Inflow', value: 'Random Bursts (7 veh/s)' },
-      { label: 'Speed', value: '2 blocks/s' },
-      { label: 'Duration', value: '200s' }
+      { label: 'Grid Size', value: '3 × 3' },
+      { label: 'Inflow', value: 'Pulse Train' },
+      { label: 'Duration', value: '200 steps' }
     ],
     configurator: (store) => {
       const burstProfile = {
@@ -210,11 +207,9 @@ const DEMO_SCENARIOS = [
     modelBenefit: 'Our model reflects real-world road networks: you can easily configure grid dimensions, road lengths, speed limits, vehicle turn directions, and traffic volume for every road approach.',
     metric: 'Fully Configurable Network',
     parameters: [
-      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
-      { label: 'Inflow', value: '4 to 5 veh/s' },
-      { label: 'Speed', value: '3 blocks/s' },
-      { label: 'Turns', value: '60% Straight, 20% R, 20% L' },
-      { label: 'Duration', value: '200s' }
+      { label: 'Grid Size', value: '3 × 3' },
+      { label: 'Inflow', value: 'North/East: 5 | South/West: 4' },
+      { label: 'Duration', value: '200 steps' }
     ],
     configurator: (store) => {
       store.updateConfig({

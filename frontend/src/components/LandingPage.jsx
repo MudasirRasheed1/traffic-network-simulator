@@ -408,14 +408,13 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className={styles.footer}>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', flexWrap: 'wrap', marginBottom: '6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
           <Link to="/demo" style={{ color: '#38bdf8', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Interactive Demos</Link>
           <span style={{ color: '#334155' }}>•</span>
           <Link to="/docs" style={{ color: '#38bdf8', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Documentation</Link>
           <span style={{ color: '#334155' }}>•</span>
           <Link to="/contact" style={{ color: '#38bdf8', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Contact Us</Link>
         </div>
-        <p>© 2026 GreenWave Mobility. Developed for Plaksha Advanced Traffic Research Systems.</p>
       </footer>
     </div>
   );

@@ -265,7 +265,6 @@ export default function ContactPage() {
           <span className={styles.footerDot}>•</span>
           <Link to="/contact" className={styles.footerLink}>Contact Us</Link>
         </div>
-        <p>© 2026 GreenWave Mobility. Developed for Plaksha Advanced Traffic Research Systems.</p>
       </footer>
     </div>
   );

@@ -18,14 +18,13 @@ const DEMO_SCENARIOS = [
     badge: 'REAL-TIME POLICY ADAPTABILITY',
     badgeColor: '#38bdf8',
     scenarioDescription: 'Heavy asymmetric commuter traffic enters from one single direction (North corridor) while cross-streets remain virtually empty.',
-    modelBenefit: 'Demonstrates that our control policy is fully adaptable: rather than adhering to rigid fixed cycles, it monitors live queue weights in real-time, holding green lights where demand exists and skipping idle approaches to eliminate wasted green time.',
+    modelBenefit: 'Demonstrates that our control policy is fully adaptable: rather than adhering to rigid fixed cycles, it monitors live queues in real time, holding green lights where demand exists and skipping idle lanes to eliminate wasted green time.',
     metric: 'Dynamic Policy Adaptability',
     parameters: [
-      { label: 'Grid Topology', value: '3 × 3 Grid (9 Intersections)' },
-      { label: 'Inflow Profile', value: 'North 7 veh/s Surge | S/E/W 0 veh/s' },
-      { label: 'Road Dimensions', value: 'Capacity: 12 veh | Speed: 2 blocks/s' },
-      { label: 'Control Policy', value: '5s Fixed vs 5s Real-Time Greedy' },
-      { label: 'Simulation Time', value: '200 Seconds' }
+      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
+      { label: 'Inflow', value: 'North 7 veh/s Surge' },
+      { label: 'Speed', value: '2 blocks/s' },
+      { label: 'Duration', value: '200s' }
     ],
     configurator: (store) => {
       store.updateConfig({
@@ -69,14 +68,13 @@ const DEMO_SCENARIOS = [
     badge: 'INFLOW AS A FUNCTION OF TIME',
     badgeColor: '#a78bfa',
     scenarioDescription: 'Traffic volume continuously shifts throughout the day in undulating waves—peaking during rush-hour crests and dropping during off-peak intervals.',
-    modelBenefit: 'We model traffic mathematically as a continuous function of time q(t), and our policy dynamically adapts: it automatically expands green phase durations during peak wave crests and contracts them during troughs.',
+    modelBenefit: 'We model traffic as a continuous wave function over time, and our policy dynamically adapts: it automatically expands green phase durations during peak wave crests and contracts them during troughs.',
     metric: 'Time-Variant Wave Tracking',
     parameters: [
-      { label: 'Grid Topology', value: '3 × 3 Grid (9 Intersections)' },
-      { label: 'Inflow Profile', value: 'Sinusoidal q(t) [Offset: 4, Amp: 3, Period: 24s]' },
-      { label: 'Road Dimensions', value: 'Capacity: 12 veh | Speed: 2 blocks/s' },
-      { label: 'Control Policy', value: '5s Fixed vs 5s Real-Time Greedy' },
-      { label: 'Simulation Time', value: '200 Seconds' }
+      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
+      { label: 'Inflow', value: 'Wave Peaks (7 veh/s)' },
+      { label: 'Speed', value: '2 blocks/s' },
+      { label: 'Duration', value: '200s' }
     ],
     configurator: (store) => {
       const waveProfile = {
@@ -140,15 +138,14 @@ const DEMO_SCENARIOS = [
     title: 'Randomness & Multi-Distribution Modeling',
     badge: 'STOCHASTIC UNCERTAINTY & RANDOMNESS',
     badgeColor: '#f59e0b',
-    scenarioDescription: 'Vehicles arrive with inherent real-world randomness, creating sudden uncoordinated cluster spikes from stadium exits, train pickups, or diversions.',
-    modelBenefit: 'We model traffic randomness by supporting various probability distributions and stochastic arrival processes, proving how our algorithm computes marginal pressure in real time to dissipate random cluster shockwaves.',
+    scenarioDescription: 'Vehicles arrive with inherent real-world randomness, creating sudden uncoordinated traffic bursts from events, train pickups, or diversions.',
+    modelBenefit: 'We model real-world random traffic arrivals. When an unexpected cluster of vehicles arrives, our algorithm detects the queue instantly and prioritizes green lights to clear the backlog before congestion spreads.',
     metric: 'Stochastic & Randomness Modeling',
     parameters: [
-      { label: 'Grid Topology', value: '3 × 3 Grid (9 Intersections)' },
-      { label: 'Inflow Profile', value: 'Stochastic Pulse Train [Base: 1, Peak: 7 veh/s, Interval: 14s]' },
-      { label: 'Road Dimensions', value: 'Capacity: 12 veh | Speed: 2 blocks/s' },
-      { label: 'Control Policy', value: '5s Fixed vs 5s Real-Time Greedy' },
-      { label: 'Simulation Time', value: '200 Seconds' }
+      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
+      { label: 'Inflow', value: 'Random Bursts (7 veh/s)' },
+      { label: 'Speed', value: '2 blocks/s' },
+      { label: 'Duration', value: '200s' }
     ],
     configurator: (store) => {
       const burstProfile = {
@@ -199,7 +196,7 @@ const DEMO_SCENARIOS = [
         <rect x="210" y="115" width="12" height="15" fill="#334155" rx="2" />
         <rect x="230" y="105" width="12" height="25" fill="#334155" rx="2" />
         <text x="85" y="25" fill="#f59e0b" fontSize="9" fontFamily="monospace" fontWeight="bold">Stochastic Inflow Burst</text>
-        <text x="35" y="145" fill="#94a3b8" fontSize="8.5" fontFamily="monospace">Marginal Pressure Dissipation (ΔQ)</text>
+        <text x="35" y="145" fill="#94a3b8" fontSize="8.5" fontFamily="monospace">Real-Time Queue Clearing</text>
       </svg>
     )
   },
@@ -209,15 +206,15 @@ const DEMO_SCENARIOS = [
     title: 'High-Fidelity Real-World Grid & Full Configurability',
     badge: 'REAL-WORLD FIDELITY & CONFIGURATION',
     badgeColor: '#2dd4bf',
-    scenarioDescription: 'Real city networks have heterogeneous road dimensions, short block distances, differing speed limits, and strict per-lane storage capacities.',
-    modelBenefit: 'Our model is close to the real world: you can configure input inflow rates, road lengths, grid dimensions, vehicle speeds, turn probabilities, and outgoing departure rates for all approaches to prevent short-link spillback and deadlocks.',
-    metric: 'Fully Configurable Dimensions & In/Out Rates',
+    scenarioDescription: 'Real city networks have varied road lengths, differing speed limits, turn splits, and strict lane capacities.',
+    modelBenefit: 'Our model reflects real-world road networks: you can easily configure grid dimensions, road lengths, speed limits, vehicle turn directions, and traffic volume for every road approach.',
+    metric: 'Fully Configurable Network',
     parameters: [
-      { label: 'Grid Topology', value: '3 × 3 Grid (9 Intersections)' },
-      { label: 'Inflow Profile', value: 'N/E: 5 veh/s | S/W: 4 veh/s' },
-      { label: 'Road Dimensions', value: 'Capacity: 16 veh | Speed: 3 blocks/s' },
-      { label: 'Turn Split', value: '60% Straight | 20% Right | 20% Left' },
-      { label: 'Control Policy', value: '5s Fixed vs 5s Real-Time Greedy' }
+      { label: 'Grid', value: '3 × 3 (9 Nodes)' },
+      { label: 'Inflow', value: '4 – 5 veh/s' },
+      { label: 'Speed', value: '3 blocks/s' },
+      { label: 'Turns', value: '60% Straight, 20% R, 20% L' },
+      { label: 'Duration', value: '200s' }
     ],
     configurator: (store) => {
       store.updateConfig({
@@ -369,19 +366,6 @@ export default function DemoPage() {
                       <p className={styles.benefitText}>{sc.modelBenefit}</p>
                     </div>
 
-                    {/* Scenario Parameters Summary on Card */}
-                    <div className={styles.cardParamsSection}>
-                      <span className={styles.paramsSectionLabel}>SIMULATION PARAMETERS:</span>
-                      <div className={styles.cardParamsList}>
-                        {sc.parameters.map((p, pIdx) => (
-                          <div key={pIdx} className={styles.cardParamItem}>
-                            <span className={styles.cardParamKey}>{p.label}:</span>
-                            <span className={styles.cardParamVal}>{p.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
                     <div className={styles.cardFooter}>
                       <span className={styles.metricPill}>{sc.metric}</span>
                       <button className={styles.launchBtn}>
@@ -472,18 +456,14 @@ export default function DemoPage() {
               </div>
             </div>
 
-            {/* Active Scenario Parameters Summary Bar */}
-            <div className={styles.activeParamsSummaryPanel}>
-              <div className={styles.paramsSummaryHeader}>
-                <span className={styles.paramsSummaryTitle}>SCENARIO SIMULATION PARAMETERS</span>
-                <span className={styles.paramsSummarySubtitle}>Configuration driving this benchmark run</span>
-              </div>
-              <div className={styles.paramsSummaryGrid}>
+            {/* Minimal Scenario Parameters Bar */}
+            <div className={styles.activeParamsSummaryBar}>
+              <span className={styles.paramsBarLabel}>CONFIG:</span>
+              <div className={styles.paramsPillsList}>
                 {activeScenario.parameters.map((param, pIdx) => (
-                  <div key={pIdx} className={styles.paramSummaryCard}>
-                    <span className={styles.paramSummaryLabel}>{param.label}</span>
-                    <span className={styles.paramSummaryValue}>{param.value}</span>
-                  </div>
+                  <span key={pIdx} className={styles.paramPill}>
+                    <strong className={styles.paramKey}>{param.label}:</strong> {param.value}
+                  </span>
                 ))}
               </div>
             </div>

@@ -133,29 +133,27 @@ const DEMO_SCENARIOS = [
   {
     id: 'stochastic_bursts',
     num: 3,
-    title: 'Randomness & Multi-Distribution Modeling',
-    badge: 'STOCHASTIC UNCERTAINTY & RANDOMNESS',
+    title: 'Randomness & Normal Distribution Modeling',
+    badge: 'STOCHASTIC RANDOMNESS',
     badgeColor: '#f59e0b',
-    scenarioDescription: 'Vehicles arrive with inherent real-world randomness, creating sudden uncoordinated traffic bursts from events, train pickups, or diversions.',
-    modelBenefit: 'We model real-world random traffic arrivals. When an unexpected cluster of vehicles arrives, our algorithm detects the queue instantly and prioritizes green lights to clear the backlog before congestion spreads.',
-    metric: 'Stochastic & Randomness Modeling',
+    scenarioDescription: 'Vehicles arrive following a normal distribution, creating natural stochastic fluctuations in traffic volume across all approaches.',
+    modelBenefit: 'We model real-world random traffic arrivals using a normal distribution. When unexpected clusters arrive, our algorithm detects the queue instantly and prioritizes green lights to clear the backlog before congestion spreads.',
+    metric: 'Normal Distribution Modeling',
     parameters: [
       { label: 'Grid Size', value: '3 × 3' },
-      { label: 'Inflow', value: 'Pulse Train' },
+      { label: 'Inflow', value: 'Normal Distribution' },
       { label: 'Duration', value: '200 steps' }
     ],
     configurator: (store) => {
-      const burstProfile = {
-        mode: 'function',
+      const normalProfile = {
+        mode: 'distribution',
         constantValue: 0,
-        functionConfig: {
-          profileType: 'pulseTrain',
+        distributionConfig: {
+          distributionType: 'normal',
+          seed: 42,
           params: {
-            ...makeDefaultFunctionConfig().params,
-            pulseBase: 1,
-            pulsePeak: 7,
-            pulseEvery: 14,
-            pulseWidth: 3,
+            mean: 4,
+            stdDev: 1.5,
           }
         }
       };
@@ -167,32 +165,41 @@ const DEMO_SCENARIOS = [
         defaultRoadSpeed: 2,
         defaultRoadLength: 12,
         defaultBoundaryInflowProfiles: {
-          N: burstProfile,
-          S: burstProfile,
-          E: burstProfile,
-          W: burstProfile,
+          N: normalProfile,
+          S: normalProfile,
+          E: normalProfile,
+          W: normalProfile,
         }
       });
     },
-    // Vector Artwork for Card 3
+    // Vector Artwork for Card 3: Normal Bell Curve
     renderArtwork: () => (
       <svg className={styles.cardSvg} viewBox="0 0 320 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="320" height="160" rx="8" fill="#090d16" />
         {/* Baseline Axis */}
         <line x1="30" y1="130" x2="290" y2="130" stroke="#1e293b" strokeWidth="1.5" />
-        {/* Stochastic Bar Distribution */}
-        <rect x="50" y="105" width="12" height="25" fill="#334155" rx="2" />
-        <rect x="70" y="115" width="12" height="15" fill="#334155" rx="2" />
-        {/* Sudden Cluster Burst */}
-        <rect x="90" y="35" width="18" height="95" fill="#f59e0b" rx="2" />
-        <rect x="114" y="55" width="18" height="75" fill="#f59e0b" rx="2" />
-        <rect x="140" y="100" width="12" height="30" fill="#334155" rx="2" />
-        <rect x="160" y="110" width="12" height="20" fill="#334155" rx="2" />
-        {/* Second Burst */}
-        <rect x="185" y="45" width="18" height="85" fill="#f59e0b" rx="2" />
-        <rect x="210" y="115" width="12" height="15" fill="#334155" rx="2" />
-        <rect x="230" y="105" width="12" height="25" fill="#334155" rx="2" />
-        <text x="85" y="25" fill="#f59e0b" fontSize="9" fontFamily="monospace" fontWeight="bold">Stochastic Inflow Burst</text>
+        <line x1="160" y1="20" x2="160" y2="130" stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
+        
+        {/* Normal Distribution Sample Bars */}
+        <rect x="70" y="120" width="16" height="10" fill="#334155" rx="2" />
+        <rect x="92" y="105" width="16" height="25" fill="#334155" rx="2" />
+        <rect x="114" y="75" width="16" height="55" fill="#334155" rx="2" />
+        <rect x="136" y="45" width="16" height="85" fill="#f59e0b" rx="2" />
+        <rect x="158" y="38" width="16" height="92" fill="#f59e0b" rx="2" />
+        <rect x="180" y="55" width="16" height="75" fill="#f59e0b" rx="2" />
+        <rect x="202" y="85" width="16" height="45" fill="#334155" rx="2" />
+        <rect x="224" y="110" width="16" height="20" fill="#334155" rx="2" />
+        <rect x="246" y="122" width="16" height="8" fill="#334155" rx="2" />
+
+        {/* Bell Curve Line */}
+        <path
+          d="M 50 128 C 90 128, 120 120, 140 60 C 150 30, 170 30, 180 60 C 200 120, 230 128, 270 128"
+          fill="none"
+          stroke="#f59e0b"
+          strokeWidth="2.5"
+        />
+
+        <text x="120" y="24" fill="#f59e0b" fontSize="9" fontFamily="monospace" fontWeight="bold">Normal Bell Curve (μ=4, σ=1.5)</text>
         <text x="35" y="145" fill="#94a3b8" fontSize="8.5" fontFamily="monospace">Real-Time Queue Clearing</text>
       </svg>
     )

@@ -336,6 +336,15 @@ export function buildArrivalSeries(config, duration, seed) {
 
 export const DISTRIBUTION_TYPES = [
   {
+    value: 'normal', label: 'Normal (Gaussian)',
+    description: 'Continuous symmetric bell curve, rounded to non-negative integers.',
+    wikiUrl: 'https://en.wikipedia.org/wiki/Normal_distribution',
+    params: [
+      { name: 'mean', label: 'μ (mean)', default: 4, min: 0, step: 0.1 },
+      { name: 'stdDev', label: 'σ (std dev)', default: 1.5, min: 0.1, step: 0.1 },
+    ],
+  },
+  {
     value: 'poisson', label: 'Poisson',
     description: 'Classic arrival model. Mean = λ.',
     wikiUrl: 'https://en.wikipedia.org/wiki/Poisson_distribution',
@@ -648,6 +657,14 @@ function sampleHypergeometric(N, K, n, rng) {
 export function sampleFromDistribution(distributionType, params, rng) {
   const p = params || {};
   switch (distributionType) {
+    case 'normal': {
+      const mean = Math.max(0, Number(p.mean) || 4);
+      const stdDev = Math.max(0.1, Number(p.stdDev) || 1.5);
+      const u1 = Math.max(1e-9, rng());
+      const u2 = rng();
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      return Math.max(0, Math.round(mean + stdDev * z));
+    }
     case 'poisson':
       return samplePoisson(Math.max(0.01, Number(p.lambda) || 3), rng);
     case 'geometric':

@@ -271,7 +271,7 @@ export default function LandingPage() {
             <span className={styles.gradientText}>Modeling & Optimization</span>
           </h1>
           <p className={styles.description}>
-            Deploy and evaluate <strong>Greedy Lookahead Controllers</strong> against baseline <strong>Fixed Cycle</strong> schedules in a real-time, micro-simulation environment. Explore intersections, model boundary inflows, and analyze live network performance.
+            Deploy and evaluate real-time <strong>Adaptive Signal Controllers</strong> against baseline <strong>Fixed-Cycle</strong> schedules. Configure custom intersection networks, test dynamic traffic inflows, and analyze live throughput performance.
           </p>
 
           <div className={styles.heroCtaRow}>

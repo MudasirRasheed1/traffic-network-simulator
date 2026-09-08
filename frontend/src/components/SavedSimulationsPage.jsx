@@ -180,15 +180,6 @@ export default function SavedSimulationsPage() {
 
   // High level metrics
   const totalSaved = simulations.length;
-  const maxGreedyTp = simulations.reduce((max, s) => {
-    try {
-      const r = JSON.parse(s.resultsJson);
-      const tp = formatMetricValue(r.greedy?.throughput);
-      return Math.max(max, Number(tp) || 0);
-    } catch {
-      return max;
-    }
-  }, 0);
 
   return (
     <div className={styles.pageWrapper}>
@@ -239,14 +230,6 @@ export default function SavedSimulationsPage() {
         <div className={styles.kpiCard}>
           <span className={styles.kpiLabel}>Total Saved Runs</span>
           <span className={styles.kpiValue}>{totalSaved}</span>
-        </div>
-        <div className={styles.kpiCard}>
-          <span className={styles.kpiLabel}>Peak Greedy Throughput</span>
-          <span className={`${styles.kpiValue} ${styles.green}`}>{maxGreedyTp} <span className={styles.kpiUnit}>cars</span></span>
-        </div>
-        <div className={styles.kpiCard}>
-          <span className={styles.kpiLabel}>Database Backend</span>
-          <span className={styles.kpiValueText}>PostgreSQL 17</span>
         </div>
         <div className={styles.kpiCard}>
           <span className={styles.kpiLabel}>Quick Action</span>

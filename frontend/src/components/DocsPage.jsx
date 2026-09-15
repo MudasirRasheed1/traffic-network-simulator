@@ -499,6 +499,9 @@ export default function DocsPage() {
             <p>
               Vehicles drive on the <strong>left side</strong> of the road. <strong>Left turns (NL, SL, EL, WL)</strong> are free filter turns along the near curb that do not cross opposing traffic lanes and bypass signal constraints. <strong>Right turns (NR, SR, ER, WR)</strong> cross oncoming lanes and require protected green signal phases.
             </p>
+            <p>
+              This is the simulator's default. A <strong>Driving Side</strong> toggle in Simulation Parameters lets you switch the network to right-hand driving, which mirrors these rules - right turns become the free filter turn and left turns become signal-controlled.
+            </p>
           </div>
         </div>
 

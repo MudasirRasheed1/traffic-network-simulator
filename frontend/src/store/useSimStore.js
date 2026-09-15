@@ -10,6 +10,7 @@ import { makeConstantInflowProfile } from '../simulation/arrivalProfile.js';
 const DEFAULT_CONFIG = {
   gridSize: 3,
   simDuration: 200,
+  drivingSide: 'left',
   defaultRoadSpeed: 2,
   defaultRoadLength: 12,
   defaultTurnProbT: 0.7,

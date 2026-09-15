@@ -199,57 +199,76 @@ function IntersectionNode({ data, isGreedy, decisionData, currentTime, greedyDec
   );
 }
 
-function HRoad({ count, fromR, fromC, toR, toC, roadsData }) {
+// Lane positions reflect which side of the road each direction of travel
+// keeps to. Left-hand drive: eastbound keeps north (top), northbound keeps
+// west (left). Right-hand drive mirrors both axes.
+function laneTopPositions(isRightHand) {
+  return isRightHand
+    ? { E: '55%', W: '35%', countE: '62%', countW: '20%' }
+    : { E: '35%', W: '55%', countE: '20%', countW: '62%' };
+}
+
+function laneLeftPositions(isRightHand) {
+  return isRightHand
+    ? { N: '55%', S: '35%', countN: '72%', countS: '8%' }
+    : { N: '35%', S: '55%', countN: '8%', countS: '72%' };
+}
+
+function HRoad({ count, fromR, fromC, toR, toC, roadsData, isRightHand }) {
   const keyE = fromC < toC ? `${fromR},${fromC}->${toR},${toC}` : `${toR},${toC}->${fromR},${fromC}`;
   const keyW = fromC < toC ? `${toR},${toC}->${fromR},${fromC}` : `${fromR},${fromC}->${toR},${toC}`;
   const countE = roadsData[keyE] || 0;
   const countW = roadsData[keyW] || 0;
+  const lanes = laneTopPositions(isRightHand);
 
   return (
     <div className={styles.roadH}>
-      <div className={styles.roadLine} style={{ background: DIRECTION_CONFIG.E.color, top: '35%' }} />
-      <div className={styles.roadLine} style={{ background: DIRECTION_CONFIG.W.color, top: '55%' }} />
-      {countE > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.E.color, top: '20%' }}>{countE}</span>}
-      {countW > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.W.color, top: '62%' }}>{countW}</span>}
+      <div className={styles.roadLine} style={{ background: DIRECTION_CONFIG.E.color, top: lanes.E }} />
+      <div className={styles.roadLine} style={{ background: DIRECTION_CONFIG.W.color, top: lanes.W }} />
+      {countE > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.E.color, top: lanes.countE }}>{countE}</span>}
+      {countW > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.W.color, top: lanes.countW }}>{countW}</span>}
     </div>
   );
 }
 
-function VRoad({ fromR, fromC, toR, toC, roadsData }) {
+function VRoad({ fromR, fromC, toR, toC, roadsData, isRightHand }) {
   const keyS = fromR < toR ? `${fromR},${fromC}->${toR},${toC}` : `${toR},${toC}->${fromR},${fromC}`;
   const keyN = fromR < toR ? `${toR},${toC}->${fromR},${fromC}` : `${fromR},${fromC}->${toR},${toC}`;
   const countN = roadsData[keyN] || 0;
   const countS = roadsData[keyS] || 0;
+  const lanes = laneLeftPositions(isRightHand);
 
   return (
     <div className={styles.roadV}>
-      <div className={styles.roadLineV} style={{ background: DIRECTION_CONFIG.N.color, left: '35%' }} />
-      <div className={styles.roadLineV} style={{ background: DIRECTION_CONFIG.S.color, left: '55%' }} />
-      {countN > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.N.color, left: '8%' }}>{countN}</span>}
-      {countS > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.S.color, left: '72%' }}>{countS}</span>}
+      <div className={styles.roadLineV} style={{ background: DIRECTION_CONFIG.N.color, left: lanes.N }} />
+      <div className={styles.roadLineV} style={{ background: DIRECTION_CONFIG.S.color, left: lanes.S }} />
+      {countN > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.N.color, left: lanes.countN }}>{countN}</span>}
+      {countS > 0 && <span className={styles.vehicleCountDir} style={{ color: DIRECTION_CONFIG.S.color, left: lanes.countS }}>{countS}</span>}
     </div>
   );
 }
 
-function EdgeRoadH({ approach, side }) {
+function EdgeRoadH({ approach, side, isRightHand }) {
+  const lanes = laneTopPositions(isRightHand);
   return (
     <div className={`${styles.edgeRoadH} ${styles[side]}`}>
-      <div className={styles.edgeRoadLine} style={{ background: DIRECTION_CONFIG.E.color, top: '35%' }} />
-      <div className={styles.edgeRoadLine} style={{ background: DIRECTION_CONFIG.W.color, top: '55%' }} />
+      <div className={styles.edgeRoadLine} style={{ background: DIRECTION_CONFIG.E.color, top: lanes.E }} />
+      <div className={styles.edgeRoadLine} style={{ background: DIRECTION_CONFIG.W.color, top: lanes.W }} />
     </div>
   );
 }
 
-function EdgeRoadV({ approach, side }) {
+function EdgeRoadV({ approach, side, isRightHand }) {
+  const lanes = laneLeftPositions(isRightHand);
   return (
     <div className={`${styles.edgeRoadV} ${styles[side]}`}>
-      <div className={styles.edgeRoadLineV} style={{ background: DIRECTION_CONFIG.N.color, left: '35%' }} />
-      <div className={styles.edgeRoadLineV} style={{ background: DIRECTION_CONFIG.S.color, left: '55%' }} />
+      <div className={styles.edgeRoadLineV} style={{ background: DIRECTION_CONFIG.N.color, left: lanes.N }} />
+      <div className={styles.edgeRoadLineV} style={{ background: DIRECTION_CONFIG.S.color, left: lanes.S }} />
     </div>
   );
 }
 
-function NetworkGridView({ gridData, roadsData, gridSize, isGreedy, greedyDecisionData, currentTime, greedyDecisionInterval, onOpenReasoning, relativeDiffByKey, maxAbsDiff, importedGridLabels, importedCoordLabels, importedOriginGridKey }) {
+function NetworkGridView({ gridData, roadsData, gridSize, isGreedy, greedyDecisionData, currentTime, greedyDecisionInterval, onOpenReasoning, relativeDiffByKey, maxAbsDiff, importedGridLabels, importedCoordLabels, importedOriginGridKey, isRightHand }) {
   if (!gridData || !gridData.length) {
     return <div className={styles.noData}>No simulation data</div>;
   }
@@ -259,7 +278,7 @@ function NetworkGridView({ gridData, roadsData, gridSize, isGreedy, greedyDecisi
   // Top edge roads
   const topEdgeRow = [];
   for (let c = 0; c < gridSize; c++) {
-    topEdgeRow.push(<EdgeRoadV key={`top-edge-${c}`} approach="N" side="top" />);
+    topEdgeRow.push(<EdgeRoadV key={`top-edge-${c}`} approach="N" side="top" isRightHand={isRightHand} />);
     if (c < gridSize - 1) topEdgeRow.push(<div key={`top-spacer-${c}`} className={styles.roadVSpacer} />);
   }
   rows.push(<div key="top-edge" className={styles.roadVRow}>{topEdgeRow}</div>);
@@ -268,7 +287,7 @@ function NetworkGridView({ gridData, roadsData, gridSize, isGreedy, greedyDecisi
     const interRow = [];
 
     // Left edge road
-    interRow.push(<EdgeRoadH key={`left-edge-${r}`} approach="W" side="left" />);
+    interRow.push(<EdgeRoadH key={`left-edge-${r}`} approach="W" side="left" isRightHand={isRightHand} />);
 
     for (let c = 0; c < gridSize; c++) {
       const pKey = `${r},${c}`;
@@ -294,13 +313,14 @@ function NetworkGridView({ gridData, roadsData, gridSize, isGreedy, greedyDecisi
             fromR={r} fromC={c} toR={r} toC={c + 1}
             roadsData={roadsData}
             count={0}
+            isRightHand={isRightHand}
           />
         );
       }
     }
 
     // Right edge road
-    interRow.push(<EdgeRoadH key={`right-edge-${r}`} approach="E" side="right" />);
+    interRow.push(<EdgeRoadH key={`right-edge-${r}`} approach="E" side="right" isRightHand={isRightHand} />);
 
     rows.push(<div key={`row-${r}`} className={styles.gridRow}>{interRow}</div>);
 
@@ -312,6 +332,7 @@ function NetworkGridView({ gridData, roadsData, gridSize, isGreedy, greedyDecisi
             key={`vroad-${r}-${c}`}
             fromR={r} fromC={c} toR={r + 1} toC={c}
             roadsData={roadsData}
+            isRightHand={isRightHand}
           />
         );
         if (c < gridSize - 1) {
@@ -325,7 +346,7 @@ function NetworkGridView({ gridData, roadsData, gridSize, isGreedy, greedyDecisi
   // Bottom edge roads
   const bottomEdgeRow = [];
   for (let c = 0; c < gridSize; c++) {
-    bottomEdgeRow.push(<EdgeRoadV key={`bottom-edge-${c}`} approach="S" side="bottom" />);
+    bottomEdgeRow.push(<EdgeRoadV key={`bottom-edge-${c}`} approach="S" side="bottom" isRightHand={isRightHand} />);
     if (c < gridSize - 1) bottomEdgeRow.push(<div key={`bottom-spacer-${c}`} className={styles.roadVSpacer} />);
   }
   rows.push(<div key="bottom-edge" className={styles.roadVRow}>{bottomEdgeRow}</div>);
@@ -435,6 +456,8 @@ export default function GridVisualization() {
     ? snapshot.greedyDecisionData?.[`${reasoningModal.row},${reasoningModal.col}`]
     : null;
 
+  const isRightHand = (snapshot.drivingSide || config.drivingSide) === 'right';
+
   // Dynamic size tier
   const sizeTierClass = gridSize <= 3 ? styles.sizeNormal : gridSize <= 5 ? styles.sizeMedium : styles.sizeCompact;
 
@@ -462,6 +485,8 @@ export default function GridVisualization() {
         </div>
 
         <div className={styles.clock}>
+          <span className={styles.clockLabel}>{isRightHand ? 'Right-hand drive' : 'Left-hand drive'}</span>
+          <span className={styles.clockSep}>|</span>
           <span className={styles.clockLabel}>Step</span>
           <span className={styles.clockValue}>{snapshot.time}</span>
           <span className={styles.clockSep}>/</span>
@@ -513,6 +538,7 @@ export default function GridVisualization() {
             relativeDiffByKey={relativeDiffByKey}
             maxAbsDiff={maxAbsDiff}
             importedGridLabels={scenarioMode === 'imported' ? importedGridLabels : null}
+            isRightHand={isRightHand}
           />
           <PolicySummary data={snapshot.fixed} />
         </div>
@@ -532,6 +558,7 @@ export default function GridVisualization() {
             importedGridLabels={scenarioMode === 'imported' ? importedGridLabels : null}
             importedCoordLabels={scenarioMode === 'imported' ? importedCoordLabels : null}
             importedOriginGridKey={scenarioMode === 'imported' ? importedOriginGridKey : null}
+            isRightHand={isRightHand}
           />
           <PolicySummary data={snapshot.greedy} />
         </div>
@@ -543,6 +570,7 @@ export default function GridVisualization() {
           onClose={handleCloseReasoning}
           currentTime={snapshot.time}
           greedyDecisionInterval={config.greedyDecisionInterval}
+          drivingSide={snapshot.drivingSide || 'left'}
         />
       )}
     </div>

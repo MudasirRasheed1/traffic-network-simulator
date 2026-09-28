@@ -59,7 +59,7 @@ const ALLOWED_FUNCTION_TYPES = new Set([
   'sinCos',
 ]);
 
-function cloneProfile(profile) {
+export function cloneProfile(profile) {
   if (!profile) return makeConstantInflowProfile(0);
   return {
     ...profile,
@@ -74,7 +74,7 @@ function cloneProfile(profile) {
   };
 }
 
-function InflowFunctionEditor({ profile, onChange, disabled }) {
+export function InflowFunctionEditor({ profile, onChange, disabled }) {
   const fnCfg = profile.functionConfig || makeFunctionInflowProfile().functionConfig;
   const params = fnCfg.params || {};
 
@@ -228,7 +228,7 @@ function InflowFunctionEditor({ profile, onChange, disabled }) {
   );
 }
 
-function InflowDistributionEditor({ profile, onChange, disabled }) {
+export function InflowDistributionEditor({ profile, onChange, disabled }) {
   const distCfg = profile.distributionConfig || makeDefaultDistributionConfig();
   const distParams = distCfg.params || {};
 

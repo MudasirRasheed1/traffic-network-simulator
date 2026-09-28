@@ -6,6 +6,8 @@ import LandingPage from './components/LandingPage.jsx';
 import SavedSimulationsPage from './components/SavedSimulationsPage.jsx';
 import ContactPage from './components/ContactPage.jsx';
 import DemoPage from './components/DemoPage.jsx';
+import NetworkExplorerPage from './components/network/NetworkExplorerPage.jsx';
+import CitySimulatorPage from './components/city/CitySimulatorPage.jsx';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 
@@ -16,6 +18,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/" element={<LandingPage />} />
         <Route path="/demo" element={<DemoPage />} />
         <Route path="/simulator" element={<App />} />
+        <Route path="/network" element={<NetworkExplorerPage />} />
+        <Route path="/city-sim" element={<CitySimulatorPage />} />
         <Route path="/saved-simulations" element={<SavedSimulationsPage />} />
         <Route path="/docs" element={<DocsPage />} />
         <Route path="/contact" element={<ContactPage />} />

@@ -96,6 +96,18 @@ export default function App() {
               Simulator
             </Link>
             <Link 
+              to="/city-sim" 
+              className={styles.toolbarBtn}
+            >
+              City Simulator
+            </Link>
+            <Link 
+              to="/network" 
+              className={styles.toolbarBtn}
+            >
+              Network Explorer
+            </Link>
+            <Link 
               to="/saved-simulations" 
               className={styles.toolbarBtn}
             >

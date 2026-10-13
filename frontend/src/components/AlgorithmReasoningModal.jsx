@@ -1,4 +1,4 @@
-import { PHASES, APPROACH_TO_HEADING } from '../simulation/constants.js';
+import { buildPhaseConfig, getControlledTurn, APPROACH_TO_HEADING } from '../simulation/constants.js';
 import styles from './AlgorithmReasoningModal.module.css';
 
 const DIR_LABELS = {
@@ -8,16 +8,22 @@ const DIR_LABELS = {
   W: 'Westbound',
 };
 
-const PHASE_DESCRIPTIONS = {
-  NT_NR: 'Northbound Through + Right',
-  ST_SR: 'Southbound Through + Right',
-  ET_ER: 'Eastbound Through + Right',
-  WT_WR: 'Westbound Through + Right',
-  NT_ST: 'Northbound + Southbound Through',
-  ET_WT: 'Eastbound + Westbound Through',
-  NR_SR: 'Northbound + Southbound Right',
-  ER_WR: 'Eastbound + Westbound Right',
-};
+const TURN_LABEL = { R: 'Right', L: 'Left' };
+
+function buildPhaseDescriptions(drivingSide) {
+  const turn = getControlledTurn(drivingSide);
+  const turnLabel = TURN_LABEL[turn];
+  return {
+    [`NT_N${turn}`]: `Northbound Through + ${turnLabel}`,
+    [`ST_S${turn}`]: `Southbound Through + ${turnLabel}`,
+    [`ET_E${turn}`]: `Eastbound Through + ${turnLabel}`,
+    [`WT_W${turn}`]: `Westbound Through + ${turnLabel}`,
+    NT_ST: 'Northbound + Southbound Through',
+    ET_WT: 'Eastbound + Westbound Through',
+    [`N${turn}_S${turn}`]: `Northbound + Southbound ${turnLabel}`,
+    [`E${turn}_W${turn}`]: `Eastbound + Westbound ${turnLabel}`,
+  };
+}
 
 function MovementTag({ approach, movement }) {
   const heading = APPROACH_TO_HEADING[approach];
@@ -130,11 +136,13 @@ function StepTraceTable({ traces }) {
   );
 }
 
-export default function AlgorithmReasoningModal({ data, onClose, currentTime, greedyDecisionInterval }) {
+export default function AlgorithmReasoningModal({ data, onClose, currentTime, greedyDecisionInterval, drivingSide = 'left' }) {
   if (!data) return null;
 
   const dirs = ['N', 'S', 'E', 'W'];
   const dirColors = { N: '#ef4444', S: '#22c55e', E: '#3b82f6', W: '#f59e0b' };
+  const { PHASES } = buildPhaseConfig(drivingSide);
+  const PHASE_DESCRIPTIONS = buildPhaseDescriptions(drivingSide);
 
   // Find max queue length for bar scaling
   let maxQ = 1;

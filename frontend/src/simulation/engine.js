@@ -10,15 +10,11 @@
 
 import {
   DIRECTIONS,
-  PHASES,
-  PHASE_NAMES,
-  FIXED_CYCLE,
   EXIT_TO_NEIGHBOR_DELTA,
   ARRIVAL_APPROACH,
   APPROACH_TO_HEADING,
-  LEFT_EXIT,
-  THROUGH_EXIT,
-  RIGHT_EXIT,
+  EXIT_MAP,
+  buildPhaseConfig,
 } from './constants.js';
 import { PolicyRng } from './rng.js';
 import { evaluateArrivalAt, buildDistributionSeries } from './arrivalProfile.js';
@@ -235,7 +231,16 @@ export class SimulationEngine {
         sampleInterval: Math.max(1, Math.floor(config.debug?.sampleInterval || 5)),
       },
       seed: config.seed ?? 2,
+      drivingSide: config.drivingSide === 'right' ? 'right' : 'left',
     };
+
+    const phaseConfig = buildPhaseConfig(this.config.drivingSide);
+    this.PHASES = phaseConfig.PHASES;
+    this.PHASE_NAMES = phaseConfig.PHASE_NAMES;
+    this.FIXED_CYCLE = phaseConfig.FIXED_CYCLE;
+    this.controlledTurn = phaseConfig.controlledTurn;
+    this.freeTurn = phaseConfig.freeTurn;
+
     this.currentTime = 0;
     this.isComplete = false;
     this.fixedState = null;
@@ -323,7 +328,7 @@ export class SimulationEngine {
     // Seed an initial phase so step 0 can serve vehicles before the first decision.
     for (let r = 0; r < cfg.gridSize; r++) {
       for (let c = 0; c < cfg.gridSize; c++) {
-        this.greedyState.grid[r][c].currentPhase = PHASE_NAMES[0];
+        this.greedyState.grid[r][c].currentPhase = this.PHASE_NAMES[0];
       }
     }
 
@@ -483,13 +488,15 @@ export class SimulationEngine {
   }
 
   // =====================================================
-  // FREE LEFT TURN PROCESSING
-  // Process free-left cars from all queues (every time step, any phase)
+  // FREE TURN PROCESSING
+  // Process free-turn cars from all queues (every time step, any phase).
+  // Which intent (L or R) is "free" depends on driving side.
   // =====================================================
   processFreeLefts(state, t) {
     const cfg = this.config;
     const { grid, transitQueues, roadProps, rng: policyRng } = state;
     const gridSize = cfg.gridSize;
+    const freeTurn = this.freeTurn;
 
     for (let r = 0; r < gridSize; r++) {
       for (let c = 0; c < gridSize; c++) {
@@ -501,9 +508,9 @@ export class SimulationEngine {
           const remaining = [];
 
           for (const car of queue) {
-            if (car.intent === 'L' && leftCount < maxLeave) {
+            if (car.intent === freeTurn && leftCount < maxLeave) {
               leftCount++;
-              const exitDir = LEFT_EXIT[approach];
+              const exitDir = EXIT_MAP[freeTurn][approach];
               this.routeCar(state, r, c, car, approach, exitDir, t);
             } else {
               remaining.push(car);
@@ -615,11 +622,11 @@ export class SimulationEngine {
           const destInter = grid[dr][dc];
           const approach = car.arrivalApproach;
 
-          // If intent is L, route immediately as free-left
-          if (car.intent === 'L') {
+          // If intent is the free turn, route immediately (bypasses signal)
+          if (car.intent === this.freeTurn) {
             // Set enteredQueueAt for tracking even though it doesn't really queue
             car.enteredQueueAt = t;
-            this.routeCar(state, dr, dc, car, approach, LEFT_EXIT[approach], t);
+            this.routeCar(state, dr, dc, car, approach, EXIT_MAP[this.freeTurn][approach], t);
           } else {
             car.enteredQueueAt = t;
             destInter.queues[approach].push(car);
@@ -646,8 +653,8 @@ export class SimulationEngine {
           enteredQueueAt: t,
           arrivalApproach: approach,
         };
-        if (car.intent === 'L') {
-          this.routeCar(state, row, col, car, approach, LEFT_EXIT[approach], t);
+        if (car.intent === this.freeTurn) {
+          this.routeCar(state, row, col, car, approach, EXIT_MAP[this.freeTurn][approach], t);
         } else {
           grid[row][col].queues[approach].push(car);
         }
@@ -688,7 +695,7 @@ export class SimulationEngine {
         for (let c = 0; c < gridSize; c++) {
           const inter = grid[r][c];
           const pKey = `${r},${c}`;
-          inter.currentPhase = FIXED_CYCLE[inter.phaseIdx % FIXED_CYCLE.length];
+          inter.currentPhase = this.FIXED_CYCLE[inter.phaseIdx % this.FIXED_CYCLE.length];
           inter.phaseIdx++;
 
           this.debugLog(t, `${policy}: signal phase update @${pKey}`, {
@@ -707,7 +714,7 @@ export class SimulationEngine {
       for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
           if (!grid[r][c].currentPhase) {
-            grid[r][c].currentPhase = PHASE_NAMES[0];
+            grid[r][c].currentPhase = this.PHASE_NAMES[0];
           }
         }
       }
@@ -722,7 +729,7 @@ export class SimulationEngine {
         const inter = grid[r][c];
         if (!inter.currentPhase) continue;
 
-        const phase = PHASES[inter.currentPhase];
+        const phase = this.PHASES[inter.currentPhase];
         if (!phase) continue;
 
         // Build allowed set: { approach -> Set of movements }
@@ -741,7 +748,7 @@ export class SimulationEngine {
           for (const car of inter.queues[approach]) {
             if (served < capacity && allowed[approach].has(car.intent)) {
               served++;
-              const exitDir = car.intent === 'T' ? THROUGH_EXIT[approach] : RIGHT_EXIT[approach];
+              const exitDir = EXIT_MAP[car.intent][approach];
               this.routeCar(state, r, c, car, approach, exitDir, t);
               const pKey = `${r},${c}`;
               this.perIntersectionMetrics[policy][pKey].vehiclesServed++;
@@ -883,7 +890,7 @@ export class SimulationEngine {
 
     const savedRngState = policyRng.getState();
     let bestScore = Infinity;
-    let bestPhase = PHASE_NAMES[0];
+    let bestPhase = this.PHASE_NAMES[0];
     const makeDirMap = () => ({ N: 0, S: 0, E: 0, W: 0 });
     const makeIntentMap = () => ({
       N: { T: 0, R: 0, L: 0 },
@@ -926,7 +933,7 @@ export class SimulationEngine {
     // Collect results for all candidate phases
     const candidateResults = [];
 
-    for (const candidatePhase of PHASE_NAMES) {
+    for (const candidatePhase of this.PHASE_NAMES) {
       policyRng.setState(savedRngState);
 
       // Deep copy this intersection's queues
@@ -970,12 +977,12 @@ export class SimulationEngine {
           for (const car of cars) {
             car.transitCountdown--;
             if (car.transitCountdown <= 0) {
-              if (car.intent !== 'L') {
+              if (car.intent !== this.freeTurn) {
                 car.enteredQueueAt = futureT;
                 simQueues[car.arrivalApproach].push(car);
                 trace.transitToQueue[car.arrivalApproach]++;
               }
-              // L cars just removed (routed away in lookahead)
+              // Free-turn cars just removed (routed away in lookahead)
             } else {
               remaining.push(car);
             }
@@ -992,7 +999,7 @@ export class SimulationEngine {
             for (let i = 0; i < rate; i++) {
               const intent = sampleIntent(btp.T, btp.R, btp.L, () => policyRng.random());
               trace.boundaryArrivalsByIntent[d][intent]++;
-              if (intent !== 'L') {
+              if (intent !== this.freeTurn) {
                 simQueues[d].push({
                   id: -1, // temp, not real
                   spawnTime: futureT,
@@ -1012,7 +1019,7 @@ export class SimulationEngine {
           let leftCount = 0;
           const remaining = [];
           for (const car of simQueues[approach]) {
-            if (car.intent === 'L' && leftCount < maxLeave) {
+            if (car.intent === this.freeTurn && leftCount < maxLeave) {
               leftCount++;
               trace.freeLeftDepartures[approach]++;
               // removed from queue
@@ -1024,7 +1031,7 @@ export class SimulationEngine {
         }
 
         // 4. Apply candidate phase
-        const phase = PHASES[candidatePhase];
+        const phase = this.PHASES[candidatePhase];
         if (phase) {
           const allowed = {};
           for (const [approach, movement] of phase) {
@@ -1256,6 +1263,7 @@ export class SimulationEngine {
       time: this.currentTime,
       isComplete: this.isComplete,
       gridSize: gridSize,
+      drivingSide: cfg.drivingSide,
       fixed: {
         grid: makeGridSnapshot(this.fixedState),
         roads: makeRoadSnapshot(this.fixedState),

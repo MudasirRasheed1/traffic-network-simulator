@@ -122,6 +122,52 @@
   border-bottom: 1px solid #1e293b;
 }
 
+.drivingSideToggleGroup {
+  display: inline-flex;
+  align-items: center;
+  background: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 4px;
+}
+
+.drivingSideBtn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.drivingSideBtn:hover:not(:disabled) {
+  color: #ffffff;
+}
+
+.drivingSideBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.drivingSideBtnActive {
+  background: #1e293b;
+  color: #38bdf8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.fieldHint {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .computedValue {
   background: #0b0f19;
   border: 1px solid #1e293b;

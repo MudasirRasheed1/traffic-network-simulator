@@ -80,9 +80,9 @@ export default function App() {
     <div className={styles.app}>
       <header className={styles.header}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
+          <Link to="/demo" className={styles.logoLink} title="Back to Interactive Demos">
             <Logo size="medium" subtitle="Greedy Lookahead Controller vs Fixed Cycle Benchmark" />
-          </div>
+          </Link>
           
           <div className={styles.toolbar}>
             <div className={styles.researcherBadge}>

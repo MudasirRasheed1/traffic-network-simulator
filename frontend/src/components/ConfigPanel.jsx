@@ -431,6 +431,32 @@ export default function ConfigPanel() {
               <label>Simulation Seed</label>
               <input type="number" min="0" value={config.seed} onChange={(e) => handleNumField('seed', e.target.value)} disabled={simActive} />
             </div>
+            <div className={styles.fieldGroup}>
+              <label>Driving Side</label>
+              <div className={styles.drivingSideToggleGroup} role="group" aria-label="Driving side">
+                <button
+                  type="button"
+                  className={`${styles.drivingSideBtn} ${config.drivingSide !== 'right' ? styles.drivingSideBtnActive : ''}`}
+                  onClick={() => updateConfig({ drivingSide: 'left' })}
+                  disabled={simActive}
+                  title="Vehicles keep to the left; left turns are free and right turns are signal-controlled"
+                >
+                  Left-hand drive
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.drivingSideBtn} ${config.drivingSide === 'right' ? styles.drivingSideBtnActive : ''}`}
+                  onClick={() => updateConfig({ drivingSide: 'right' })}
+                  disabled={simActive}
+                  title="Vehicles keep to the right; right turns are free and left turns are signal-controlled"
+                >
+                  Right-hand drive
+                </button>
+              </div>
+              <div className={styles.fieldHint}>
+                Controls which side of the road vehicles drive on. {config.drivingSide === 'right' ? 'Right' : 'Left'} turns are free (no signal needed); the opposite turn is signal-controlled.
+              </div>
+            </div>
           </div>
 
           <div className={styles.sectionTitle}>Standard Road Properties</div>
@@ -456,11 +482,11 @@ export default function ConfigPanel() {
               <input type="number" min="0" max="1" step="0.05" value={config.defaultTurnProbT} onChange={(e) => handleNumField('defaultTurnProbT', e.target.value)} disabled={simActive} />
             </div>
             <div className={styles.fieldGroup}>
-              <label>Right Turn (R)</label>
+              <label>Right Turn (R{config.drivingSide === 'right' ? ', free turn' : ''})</label>
               <input type="number" min="0" max="1" step="0.05" value={config.defaultTurnProbR} onChange={(e) => handleNumField('defaultTurnProbR', e.target.value)} disabled={simActive} />
             </div>
             <div className={styles.fieldGroup}>
-              <label>Left Turn (L, free turn)</label>
+              <label>Left Turn (L{config.drivingSide === 'right' ? '' : ', free turn'})</label>
               <input type="number" min="0" max="1" step="0.05" value={config.defaultTurnProbL} onChange={(e) => handleNumField('defaultTurnProbL', e.target.value)} disabled={simActive} />
             </div>
             <div className={styles.fieldGroup}>

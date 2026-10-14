@@ -3,6 +3,10 @@ import { useCityStore } from '../../store/useCityStore.js';
 import { METRICS, improvement, pairedStats } from '../../simulation/cityMetrics.js';
 import nx from '../network/NetworkExplorer.module.css';
 import styles from './CitySimulator.module.css';
+import { createBackgroundWorker } from '../../utils/backgroundWorker.js';
+
+// Runs several seeds off the main thread; loaded once and reused.
+const batchRunner = createBackgroundWorker(() => new Worker(new URL('../../simulation/cityBatchWorker.js', import.meta.url), { type: 'module' }));
 
 const RUN_COUNTS = [5, 10, 20];
 const pct = (v) => `${v >= 0 ? '' : '−'}${Math.abs(v * 100).toFixed(1)}%`;
@@ -19,32 +23,36 @@ export default function MultiSeedPanel() {
   const scenarioKey = JSON.stringify({ config, overrides, inflows });
   const [resultKey, setResultKey] = useState(null);
 
-  useEffect(() => () => workerRef.current?.terminate(), []);
+  // Load the runner as soon as the panel shows; stop waiting when it closes.
+  useEffect(() => {
+    batchRunner.warm();
+    return () => { if (workerRef.current) batchRunner.forget(workerRef.current); };
+  }, []);
 
   const run = () => {
-    workerRef.current?.terminate();
-    const worker = new Worker(new URL('../../simulation/cityBatchWorker.js', import.meta.url), { type: 'module' });
-    workerRef.current = worker;
+    if (workerRef.current) batchRunner.forget(workerRef.current);
     const seeds = Array.from({ length: count }, (_, k) => Number(config.seed) + k);
     setProgress({ done: 0, total: count });
     setError('');
     setResult(null);
-    worker.onmessage = (event) => {
-      const msg = event.data;
-      if (msg.type === 'progress') setProgress({ done: msg.done, total: msg.total });
-      if (msg.type === 'done') {
+    const job = batchRunner.run(
+      { city, config, overrides, inflows, seeds },
+      { onProgress: (msg) => setProgress({ done: msg.done, total: msg.total }) },
+    );
+    workerRef.current = job.id;
+    job.promise.then(
+      (msg) => {
         setResult(msg.runs);
         setResultKey(scenarioKey);
         setProgress(null);
-        worker.terminate();
-      }
-      if (msg.type === 'error') {
-        setError(msg.error);
+        workerRef.current = null;
+      },
+      (err) => {
+        setError(err.message);
         setProgress(null);
-        worker.terminate();
-      }
-    };
-    worker.postMessage({ city, config, overrides, inflows, seeds });
+        workerRef.current = null;
+      },
+    );
   };
 
   const stale = result && resultKey !== scenarioKey;
@@ -59,7 +67,7 @@ export default function MultiSeedPanel() {
   return (
     <div className={styles.rankCard}>
       <div className={styles.chartTitle}>
-        Is it consistently better? <span>(same scenario, different random seeds: turning choices and random inflows change)</span>
+        Multi-Seed Comparison <span>(same scenario, different seeds)</span>
       </div>
       <div className={styles.seedControls}>
         <div className={nx.segmented}>
@@ -73,19 +81,19 @@ export default function MultiSeedPanel() {
           {progress ? `Running ${progress.done}/${progress.total}…` : result ? 'Run again' : 'Run comparison'}
         </button>
         {progress && (
-          <button type="button" className={nx.secondaryBtn} style={{ marginTop: 0 }} onClick={() => { workerRef.current?.terminate(); setProgress(null); }}>
+          <button type="button" className={nx.secondaryBtn} style={{ marginTop: 0 }} onClick={() => { if (workerRef.current) batchRunner.forget(workerRef.current); workerRef.current = null; setProgress(null); }}>
             Cancel
           </button>
         )}
       </div>
       {progress && <div className={styles.progress}><div style={{ width: `${(progress.done / progress.total) * 100}%` }} /></div>}
       {error && <div className={nx.errorText}>{error}</div>}
-      {stale && <div className={nx.warnText}>The scenario changed since this comparison — run it again for up-to-date numbers.</div>}
+      {stale && <div className={nx.warnText}>Scenario changed. Run again to update.</div>}
       {result && (
         <>
           <table className={styles.rankTable}>
             <thead>
-              <tr><th>Metric</th><th>Fixed (avg)</th><th>Yours (avg)</th><th>Improvement</th><th>95% range</th><th>Runs won</th></tr>
+              <tr><th>Metric</th><th>Fixed (avg)</th><th>Greedy (avg)</th><th>Improvement</th><th>95% range</th><th>Runs won</th></tr>
             </thead>
             <tbody>
               {rows.map((r) => {
@@ -97,7 +105,7 @@ export default function MultiSeedPanel() {
                     <td>{r.format(r.fixed)}</td>
                     <td>{r.format(r.greedy)}</td>
                     <td className={cls}>{pct(s.mean)}</td>
-                    <td className={cls}>{Number.isFinite(s.low) ? `${pct(s.low)} … ${pct(s.high)}` : '—'}</td>
+                    <td className={cls}>{Number.isFinite(s.low) ? `${pct(s.low)} to ${pct(s.high)}` : '-'}</td>
                     <td>{s.wins} / {s.n}</td>
                   </tr>
                 );
@@ -105,8 +113,7 @@ export default function MultiSeedPanel() {
             </tbody>
           </table>
           <p className={nx.paramDetail}>
-            Improvement is measured run by run (same seed for both policies), then averaged. Green = the whole 95% range is above zero,
-            i.e. the improvement is not down to chance at this sample size. Seeds {result[0].seed}–{result.at(-1).seed}.
+            Paired by seed. Green: the full 95% range is above zero. Seeds {result[0].seed} to {result.at(-1).seed}.
           </p>
         </>
       )}

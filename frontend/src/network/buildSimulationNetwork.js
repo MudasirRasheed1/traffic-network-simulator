@@ -553,10 +553,10 @@ export function buildSimulationNetwork(graph, userOptions = {}) {
     const isRoundabout = j.kind === 'roundabout';
     const signalized = isRoundabout || Boolean(conflict);
     const controlReason = isRoundabout
-      ? 'Roundabout — modelled as a signalized intersection'
+      ? 'Roundabout, modelled as a signalized intersection'
       : signalized
         ? `Crossing movements: ${conflict[0].from}${conflict[0].turn} and ${conflict[1].from}${conflict[1].turn} cannot share a phase`
-        : 'Merge/split point — traffic joins or leaves without crossing, so no signal is needed';
+        : 'Merge or split point, no signal needed';
 
     const phases = !signalized ? [] : Object.entries(PHASES)
       .map(([name, moves]) => {

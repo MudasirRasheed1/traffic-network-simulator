@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildRoadGraph } from '../buildRoadGraph.js';
 import { buildSimulationNetwork } from '../buildSimulationNetwork.js';
 import { buildCityGraph } from '../buildCityGraph.js';
-import { bboxAround } from '../geo.js';
+import { bboxAround, haversineM } from '../geo.js';
 
 const LAT0 = 30.73;
 const LON0 = 76.78;
@@ -154,5 +154,63 @@ describe.each([
       const inside = g.lat > area.south && g.lat < area.north && g.lon > area.west && g.lon < area.east;
       expect(inside).toBe(false);
     }
+  });
+
+  it('draws each road once: no source/sink road on top of another road, one road end per arm', () => {
+    for (const e of city.edges.filter((x) => x.kind !== 'internal')) {
+      const ids = e.simLinkIds.join(',');
+      const covered = city.edges.some((f) => f !== e && f.simLinkIds.length > e.simLinkIds.length
+        && (e.kind === 'feeder' ? f.to === e.to && f.simLinkIds.join(',').endsWith(ids) : f.from === e.from && f.simLinkIds.join(',').startsWith(ids)));
+      expect(covered).toBe(false);
+    }
+    const gatewayById = new Map(city.gateways.map((g) => [g.id, g]));
+    for (const i of city.intersections) {
+      for (const a of Object.values(i.arms)) {
+        const ends = new Set([...a.inEdgeIds, ...a.outEdgeIds].map((id) => city.edges.find((e) => e.id === id)).map((e) => (e.from === i.id ? e.to : e.from)).filter((id) => gatewayById.has(id)));
+        const list = Array.from(ends).map((id) => gatewayById.get(id));
+        for (let x = 0; x < list.length; x++) {
+          for (let y = x + 1; y < list.length; y++) {
+            expect(haversineM(list[x].lat, list[x].lon, list[y].lat, list[y].lon)).toBeGreaterThan(120);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe('city graph on Connaught Place divided roads', () => {
+  const data = JSON.parse(readFileSync(new URL('./fixtures/delhi-connaught-place.json', import.meta.url)));
+  const download = { south: 28.622776, west: 77.209134, north: 28.640763, east: 77.229627 };
+  // The area border cuts Tolstoy Marg between two intersections.
+  const area = { south: 28.6263695, north: 28.6371695, west: 77.2131805, east: 77.2255805 };
+  const city = buildCityGraph(buildSimulationNetwork(buildRoadGraph(data, { bbox: download })), area);
+
+  const neighbours = (id) => new Set(city.links.filter((l) => l.from === id || l.to === id).map((l) => (l.from === id ? l.to : l.from)));
+
+  it('connects every intersection to one line per real road', () => {
+    const extra = city.intersections.filter((i) => neighbours(i.id).size > i.armCount);
+    // One exception that is true to the map: eastbound Tolstoy Marg from
+    // Janpath does not reach the next roundabout in OSM and ends at a sink.
+    expect(extra.map((i) => i.name)).toEqual(['Janpath × Tolstoy Marg']);
+    expect(city.summary.overlappingDropped).toBeGreaterThan(0);
+    expect(city.summary.gatewaysMerged).toBeGreaterThan(0);
+    expect(city.gateways.some((g) => g.role === 'both')).toBe(true);
+  });
+
+  it('keeps a road that leaves the area and comes back as one road', () => {
+    expect(city.summary.throughRoadsJoined).toBe(1);
+    const janpath = city.intersections.find((i) => i.name === 'Janpath × Tolstoy Marg');
+    const roundabout = city.intersections.find((i) => i.name === 'Tolstoy Marg × Kasturba Gandhi Marg');
+    expect(city.edges.some((e) => e.kind === 'internal' && e.from === roundabout.id && e.to === janpath.id)).toBe(true);
+  });
+
+  it('gives a turn lane that skipped an intersection its own arm there', () => {
+    // Sansad Marg joins Outer Circle by a free left just past the junction.
+    expect(city.summary.turnLanesAbsorbed).toBe(1);
+    const ring = city.intersections.find((i) => i.name === 'Outer Circle');
+    const lane = Object.values(ring.arms).find((a) => a.turnLane);
+    expect(lane.name).toBe('Sansad Marg');
+    const turns = ring.movements.filter((m) => m.from === lane.dir);
+    expect(turns.filter((m) => m.allowed).map((m) => m.turn)).toEqual(['L']); // only the free left
   });
 });

@@ -1193,3 +1193,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .drawBox strong { color: var(--info); font-size: 0.85rem; }
+
+/* Direction arrows that open their road when clicked */
+.arrowIconClickable { cursor: pointer; }
+.arrowIconClickable span { transition: box-shadow 0.12s ease; }
+.arrowIconClickable:hover span { box-shadow: 0 0 0 2px #38bdf8; }

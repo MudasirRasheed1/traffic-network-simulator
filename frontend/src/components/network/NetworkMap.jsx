@@ -16,16 +16,52 @@ const PANES = [
 
 const boxToBounds = (box) => [[box.south, box.west], [box.north, box.east]];
 
+// The same path moved `px` screen pixels to the left of its direction of
+// travel. Each direction of a two-way road keeps to its own side (left-hand
+// traffic), so the two show as two paths. Recomputed at every zoom.
+function offsetPath(map, coords, px) {
+  if (!px || !map || !coords || coords.length < 2) return coords;
+  const pts = [];
+  for (const c of coords) {
+    const p = map.latLngToLayerPoint(c);
+    const last = pts[pts.length - 1];
+    if (!last || Math.abs(last.x - p.x) + Math.abs(last.y - p.y) > 0.01) pts.push(p);
+  }
+  if (pts.length < 2) return coords;
+  const normals = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const dx = pts[i + 1].x - pts[i].x;
+    const dy = pts[i + 1].y - pts[i].y;
+    const len = Math.hypot(dx, dy) || 1;
+    normals.push([dy / len, -dx / len]); // left of travel, on screen (y points down)
+  }
+  return pts.map((p, i) => {
+    const a = normals[Math.max(0, i - 1)];
+    const b = normals[Math.min(normals.length - 1, i)];
+    let nx = a[0] + b[0];
+    let ny = a[1] + b[1];
+    const len = Math.hypot(nx, ny);
+    if (len < 1e-6) [nx, ny] = b;
+    else [nx, ny] = [nx / len, ny / len];
+    // Keep the gap even around bends (capped so sharp turns do not spike).
+    const scale = px / Math.max(0.5, nx * b[0] + ny * b[1]);
+    const ll = map.layerPointToLatLng(L.point(p.x + nx * scale, p.y + ny * scale));
+    return [ll.lat, ll.lng];
+  });
+}
+
+// `pane` null puts the arrow in the normal marker pane, where it can be clicked.
 function arrowMarker(coords, fraction, pane, color = '#f8fafc', size = 18) {
   const total = polylineLengthM(coords);
   const at = pointAlong(coords, total * fraction);
   const ahead = pointAlong(coords, Math.min(total, total * fraction + 4));
   const angle = bearingDeg(at[0], at[1], ahead[0], ahead[1]);
   return L.marker(at, {
-    pane,
-    interactive: false,
+    ...(pane ? { pane } : {}),
+    interactive: !pane,
+    keyboard: false,
     icon: L.divIcon({
-      className: styles.arrowIcon,
+      className: pane ? styles.arrowIcon : `${styles.arrowIcon} ${styles.arrowIconClickable}`,
       html: `<span style="transform: rotate(${angle - 90}deg); background:${color}; width:${size}px; height:${size}px; line-height:${size}px; font-size:${Math.round(size * 0.55)}px">➤</span>`,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
@@ -71,6 +107,8 @@ export default function NetworkMap({
   fitTarget,
   mapOpacity = 1,
   mapStyle = 'dark',
+  onMapClick,
+  placing = false,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -81,7 +119,7 @@ export default function NetworkMap({
   const areaRef = useRef({ shape: null, margin: null, handles: [], move: null, label: null, dragging: null });
   const [zoom, setZoom] = useState(14);
   const callbacksRef = useRef({});
-  callbacksRef.current = { onSelect, onAreaChange, onDraftChange, onDraftClose, onDraftCancel };
+  callbacksRef.current = { onSelect, onAreaChange, onDraftChange, onDraftClose, onDraftCancel, onMapClick };
   const pendingFitRef = useRef(null);
   const areaPolygonRef = useRef(areaPolygon);
   areaPolygonRef.current = areaPolygon;
@@ -115,7 +153,12 @@ export default function NetworkMap({
       area: L.layerGroup().addTo(map),
     };
 
-    map.on('click', () => callbacksRef.current.onSelect?.(null));
+    // A click on empty map places something when the page asks for it,
+    // otherwise it clears the selection.
+    map.on('click', (e) => {
+      if (callbacksRef.current.onMapClick) callbacksRef.current.onMapClick(e.latlng.lat, e.latlng.lng);
+      else callbacksRef.current.onSelect?.(null);
+    });
     map.on('zoomend', () => {
       const z = map.getZoom();
       setZoom(z);
@@ -139,6 +182,9 @@ export default function NetworkMap({
       resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
+      // Layers belonged to the removed map; forget them so a re-created map
+      // (e.g. React dev double-mount) draws the area from scratch.
+      areaRef.current = { shape: null, margin: null, handles: [], move: null, label: null, dragging: null };
     };
   }, []);
 
@@ -335,16 +381,18 @@ export default function NetworkMap({
     if (!scene) return;
     const renderer = renderersRef.current['nx-network'];
     const z = mapRef.current?.getZoom() ?? 14;
+    // The click position goes along, for pages that place things on a road.
     const select = (target) => (e) => {
       L.DomEvent.stopPropagation(e);
-      callbacksRef.current.onSelect?.(target);
+      callbacksRef.current.onSelect?.(target, e.latlng ? [e.latlng.lat, e.latlng.lng] : null);
     };
 
     for (const g of scene.internal || []) {
       L.polyline(g.coords, { pane: 'nx-network', renderer, color: g.color, weight: 2, opacity: 0.55, interactive: false }).addTo(group);
     }
+    const map = mapRef.current;
     for (const line of scene.lines) {
-      const layer = L.polyline(line.coords, {
+      const layer = L.polyline(offsetPath(map, line.coords, line.offset), {
         pane: 'nx-network', renderer, color: line.color, weight: line.weight, opacity: 0.9, lineCap: 'round', dashArray: line.dash || null,
       });
       layer.bindTooltip(line.tooltip, { sticky: true, className: styles.mapTooltip, direction: 'top', offset: [0, -6] });
@@ -360,7 +408,14 @@ export default function NetworkMap({
       marker.addTo(group);
       pointMarkersRef.current.push({ marker, point });
     }
-    for (const a of scene.arrows || []) arrowMarker(a.coords, a.fraction, 'nx-highlight', a.color, a.size).addTo(deco);
+    for (const a of scene.arrows || []) {
+      const arrow = arrowMarker(offsetPath(map, a.coords, a.offset), a.fraction, a.select ? null : 'nx-highlight', a.color, a.size);
+      if (a.select) {
+        if (a.tooltip) arrow.bindTooltip(a.tooltip, { className: styles.mapTooltip, direction: 'top', offset: [0, -8] });
+        arrow.on('click', select(a.select));
+      }
+      arrow.addTo(deco);
+    }
     for (const m of scene.markers || []) {
       const marker = L.marker([m.lat, m.lon], {
         icon: L.divIcon({ className: styles[m.className] || m.className, html: m.html, iconSize: [m.size, m.size], iconAnchor: [m.size / 2, m.size / 2] }),
@@ -372,7 +427,8 @@ export default function NetworkMap({
     for (const l of scene.labels || []) {
       textMarker(l.lat, l.lon, l.text, l.kind === 'gateway' ? styles.nodeLabelGateway : styles.nodeLabel, 'nx-selected').addTo(deco);
     }
-  }, [scene]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, zoom]);
 
   // ---- Fit to a newly extracted network -------------------------
   const fittedRef = useRef(null);
@@ -394,8 +450,9 @@ export default function NetworkMap({
     const hl = renderersRef.current['nx-highlight'];
     const top = renderersRef.current['nx-selected'];
     for (const g of spec.glow || []) {
-      L.polyline(g.coords, { pane: 'nx-highlight', renderer: hl, color: '#f8fafc', weight: g.weight + 6, opacity: 0.25, interactive: false }).addTo(group);
-      L.polyline(g.coords, { pane: 'nx-highlight', renderer: hl, color: '#f8fafc', weight: Math.max(2, g.weight - 1), opacity: 0.95, interactive: false }).addTo(group);
+      const coords = offsetPath(mapRef.current, g.coords, g.offset);
+      L.polyline(coords, { pane: 'nx-highlight', renderer: hl, color: '#f8fafc', weight: g.weight + 6, opacity: 0.25, interactive: false }).addTo(group);
+      L.polyline(coords, { pane: 'nx-highlight', renderer: hl, color: '#f8fafc', weight: Math.max(2, g.weight - 1), opacity: 0.95, interactive: false }).addTo(group);
     }
     for (const coords of spec.dashed || []) {
       L.polyline(coords, { pane: 'nx-selected', renderer: top, color: '#fbbf24', weight: 2.5, dashArray: '4 4', interactive: false }).addTo(group);
@@ -406,7 +463,7 @@ export default function NetworkMap({
     for (const r of spec.rings || []) {
       L.circleMarker([r.lat, r.lon], { pane: 'nx-selected', renderer: top, radius: r.radius(zoom), color: '#f8fafc', weight: 2, fill: false, interactive: false }).addTo(group);
     }
-    for (const a of spec.arrows || []) arrowMarker(a.coords, a.fraction, 'nx-selected').addTo(group);
+    for (const a of spec.arrows || []) arrowMarker(offsetPath(mapRef.current, a.coords, a.offset), a.fraction, 'nx-selected').addTo(group);
     for (const l of spec.labels || []) textMarker(l.lat, l.lon, l.text, styles.armLabel).addTo(group);
   }, [selection, scene, zoom]);
 
@@ -422,6 +479,12 @@ export default function NetworkMap({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
+
+  // Crosshair while the page is waiting for a spot on the map.
+  useEffect(() => {
+    const el = mapRef.current?.getContainer();
+    if (el) el.style.cursor = placing ? 'crosshair' : '';
+  }, [placing]);
 
   return <div ref={containerRef} className={styles.map} />;
 }

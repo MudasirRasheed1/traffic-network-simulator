@@ -13,7 +13,10 @@
 //                    departureRate } }, phases: [name], fixedCycle: [name] }]
 //   edges:         [{ id, from, to, toArm, kind: internal|feeder|exit,
 //                    travelSteps, storageVeh, share, turnProbs: {T,R,L} }]
-//   entries:       [{ key, edgeId, profile }]   inflow per feeder edge
+//   entries:       [{ key, edgeId, profile, edges? }]   inflow per source;
+//                  edges: [{ edgeId, share }] when its road later splits
+//   edge.linkEnds (optional): [{ linkId, end }] road pieces along the edge,
+//                  only used to report where cars are (snapshot.links)
 //
 // Edges are processed in array order (this matters for exact parity).
 // =====================================================
@@ -146,16 +149,29 @@ export class GraphSimulationEngine {
 
     this.plannedArrivals = [];
     this.plannedTotalSeries = [];
+    // A source whose road splits further on: each car takes one of its
+    // routes. This uses its own random stream, so sources with a single
+    // route draw exactly as before.
+    const routeRngs = new Map();
+    const pickRoute = (en) => {
+      if (!routeRngs.has(en.key)) routeRngs.set(en.key, new PolicyRng(`${cfg.seed}_route_${en.key}`));
+      const total = en.edges.reduce((sum, x) => sum + (x.share ?? 1), 0) || 1;
+      let r = routeRngs.get(en.key).random() * total;
+      const chosen = en.edges.find((x) => (r -= (x.share ?? 1)) < 0) || en.edges[en.edges.length - 1];
+      return chosen.edgeId;
+    };
     for (let t = 0; t < cfg.simDuration; t++) {
       const stepArrivals = [];
       for (const en of net.entries) {
         const rate = this.arrivalRateSeriesByKey[en.key][t] ?? 0;
+        const splits = en.edges?.length > 1;
         const edge = this.edgeById.get(en.edgeId);
         const probs = this.turnProbsFor(edge);
         for (let k = 0; k < rate; k++) {
           const id = ++this.carSeq;
-          const intent = sampleIntent(probs, () => genRng.random());
-          stepArrivals.push({ entryKey: en.key, edgeId: en.edgeId, car: { id, spawnTime: t, intent } });
+          const edgeId = splits ? pickRoute(en) : en.edgeId;
+          const intent = sampleIntent(splits ? this.turnProbsFor(this.edgeById.get(edgeId)) : probs, () => genRng.random());
+          stepArrivals.push({ entryKey: en.key, edgeId, car: { id, spawnTime: t, intent } });
         }
       }
       this.plannedArrivals.push(stepArrivals);
@@ -190,11 +206,15 @@ export class GraphSimulationEngine {
       sumTotalWaitTimes: [],
       sumStdTotalWaitTimes: [],
       realizedArrivalsTotalSeries: [],
+      realizedArrivalsByKeySeries: {},
       waitingToEnterSeries: [],
       completedTrips: 0,
       totalTravelSteps: 0,
     });
     this.globalMetrics = { fixed: emptyGlobal(), greedy: emptyGlobal() };
+    for (const gm of Object.values(this.globalMetrics)) {
+      for (const en of net.entries) gm.realizedArrivalsByKeySeries[en.key] = [];
+    }
   }
 
   makeState(policy) {
@@ -362,11 +382,12 @@ export class GraphSimulationEngine {
 
     // 2. New arrivals from the entries.
     let realized = 0;
+    const realizedByKey = {};
     const pending = [...(this.plannedArrivals[t] || [])];
     if (cfg.spillback) {
       // Cars that could not enter earlier go first.
       const held = [];
-      for (const en of net.entries) held.push(...state.backlog.get(en.key).map((car) => ({ entryKey: en.key, edgeId: en.edgeId, car })));
+      for (const en of net.entries) held.push(...state.backlog.get(en.key).map((car) => ({ entryKey: en.key, edgeId: car.edgeId ?? en.edgeId, car })));
       for (const en of net.entries) state.backlog.set(en.key, []);
       pending.unshift(...held);
     }
@@ -382,15 +403,18 @@ export class GraphSimulationEngine {
           node.queues[car.arrivalApproach].push(car);
         }
         realized++;
+        realizedByKey[entryKey] = (realizedByKey[entryKey] || 0) + 1;
       } else if (this.hasSpace(state, edge)) {
         state.transit.get(edge.id).push({ ...car, edgeId: edge.id, transitCountdown: edge.travelSteps, enteredQueueAt: -1 });
         state.occupancy.set(edge.id, state.occupancy.get(edge.id) + 1);
         realized++;
+        realizedByKey[entryKey] = (realizedByKey[entryKey] || 0) + 1;
       } else {
-        state.backlog.get(entryKey).push(template);
+        state.backlog.get(entryKey).push({ ...template, edgeId });
       }
     }
     this.globalMetrics[pol].realizedArrivalsTotalSeries.push(realized);
+    for (const en of net.entries) this.globalMetrics[pol].realizedArrivalsByKeySeries[en.key].push(realizedByKey[en.key] || 0);
     let waiting = 0;
     for (const list of state.backlog.values()) waiting += list.length;
     this.globalMetrics[pol].waitingToEnterSeries.push(waiting);
@@ -513,7 +537,9 @@ export class GraphSimulationEngine {
   }
 
   // ---------------------------------------------------------------
-  // Greedy lookahead (local to one intersection, never mutates state)
+  // Greedy lookahead (local to one intersection, never mutates state).
+  // Records the same decision data as the grid engine, so the
+  // "algorithm reasoning" view can show every number used.
   // ---------------------------------------------------------------
   greedySelectPhase(state, inter, t) {
     const cfg = this.config;
@@ -525,6 +551,26 @@ export class GraphSimulationEngine {
       return e.to === inter.id && (e.travelSteps ?? 0) <= 0;
     });
     const feedingEdges = this.inEdgesOf.get(inter.id);
+    const makeDirMap = () => ({ N: 0, S: 0, E: 0, W: 0 });
+    const makeIntentMap = () => ({ N: { T: 0, R: 0, L: 0 }, S: { T: 0, R: 0, L: 0 }, E: { T: 0, R: 0, L: 0 }, W: { T: 0, R: 0, L: 0 } });
+    const capsAt = (time) => Object.fromEntries(DIRECTIONS.map((d) => [d, capacityAt(inter.arms[d]?.departureRate ?? 0, time)]));
+
+    const queuesBefore = {};
+    const totalWaitBefore = {};
+    for (const d of DIRECTIONS) {
+      queuesBefore[d] = node.queues[d].length;
+      totalWaitBefore[d] = node.queues[d].reduce((s, car) => s + (t - car.enteredQueueAt), 0);
+    }
+    const horizonInputs = [];
+    for (let h = 1; h <= cfg.lookaheadH; h++) {
+      const futureT = t + h;
+      const boundaryArrivalRates = makeDirMap();
+      for (const en of directEntries) {
+        const e = this.edgeById.get(en.edgeId);
+        boundaryArrivalRates[e.toArm] += this.arrivalRateSeriesByKey[en.key]?.[futureT] ?? 0;
+      }
+      horizonInputs.push({ time: futureT, boundaryArrivalRates, departureCaps: capsAt(futureT) });
+    }
 
     let bestScore = Infinity;
     let bestPhase = candidates[0];
@@ -535,9 +581,23 @@ export class GraphSimulationEngine {
       const simQueues = {};
       for (const d of DIRECTIONS) simQueues[d] = node.queues[d].map((car) => ({ ...car }));
       const feeding = feedingEdges.map((e) => state.transit.get(e.id).map((car) => ({ ...car })));
+      const stepTrace = [];
 
       for (let h = 1; h <= cfg.lookaheadH; h++) {
         const futureT = t + h;
+        const trace = {
+          time: futureT,
+          queueStart: makeDirMap(),
+          transitToQueue: makeDirMap(),
+          boundaryArrivalRates: { ...horizonInputs[h - 1].boundaryArrivalRates },
+          boundaryArrivalsByIntent: makeIntentMap(),
+          boundaryToQueue: makeDirMap(),
+          freeLeftDepartures: makeDirMap(),
+          phaseDepartures: makeDirMap(),
+          queueEnd: makeDirMap(),
+        };
+        for (const d of DIRECTIONS) trace.queueStart[d] = simQueues[d].length;
+
         // Arrivals from edges feeding this intersection.
         feeding.forEach((cars, k) => {
           const remaining = [];
@@ -547,6 +607,7 @@ export class GraphSimulationEngine {
               if (car.intent !== 'L' && !car.exiting) {
                 car.enteredQueueAt = futureT;
                 simQueues[car.arrivalApproach].push(car);
+                trace.transitToQueue[car.arrivalApproach]++;
               }
             } else {
               remaining.push(car);
@@ -561,7 +622,11 @@ export class GraphSimulationEngine {
           const probs = this.turnProbsFor(e);
           for (let k = 0; k < rate; k++) {
             const intent = sampleIntent(probs, () => state.rng.random());
-            if (intent !== 'L') simQueues[e.toArm].push({ id: -1, spawnTime: futureT, intent, enteredQueueAt: futureT, arrivalApproach: e.toArm });
+            trace.boundaryArrivalsByIntent[e.toArm][intent]++;
+            if (intent !== 'L') {
+              simQueues[e.toArm].push({ id: -1, spawnTime: futureT, intent, enteredQueueAt: futureT, arrivalApproach: e.toArm });
+              trace.boundaryToQueue[e.toArm]++;
+            }
           }
         }
         // Free lefts.
@@ -572,6 +637,7 @@ export class GraphSimulationEngine {
             if (car.intent === 'L' && leftCount < maxLeave) { leftCount++; return false; }
             return true;
           });
+          trace.freeLeftDepartures[approach] = leftCount;
         }
         // Candidate phase service.
         const phase = PHASES[candidatePhase];
@@ -588,17 +654,38 @@ export class GraphSimulationEngine {
             if (served < capacity && allowed[approach].has(car.intent)) { served++; return false; }
             return true;
           });
+          trace.phaseDepartures[approach] = served;
         }
+        for (const d of DIRECTIONS) trace.queueEnd[d] = simQueues[d].length;
+        stepTrace.push(trace);
       }
 
       const futureT = t + cfg.lookaheadH;
       const totalWaits = DIRECTIONS.map((d) => simQueues[d].reduce((s, car) => s + (futureT - car.enteredQueueAt), 0));
       const qLens = DIRECTIONS.map((d) => simQueues[d].length);
-      const score = cfg.totalWaitWeight * totalWaits.reduce((a, b) => a + b, 0)
-        + cfg.totalWaitStdWeight * pstdev(totalWaits)
-        + cfg.queueWeight * qLens.reduce((a, b) => a + b, 0)
-        + cfg.queueStdWeight * pstdev(qLens);
-      candidateResults.push({ phase: candidatePhase, totalScore: score, queuesAfter: Object.fromEntries(DIRECTIONS.map((d, k) => [d, qLens[k]])) });
+      const sumTotalWait = totalWaits.reduce((a, b) => a + b, 0);
+      const stdTotalWait = pstdev(totalWaits);
+      const sumQ = qLens.reduce((a, b) => a + b, 0);
+      const stdQ = pstdev(qLens);
+      const costTerms = {
+        termTotalWait: cfg.totalWaitWeight * sumTotalWait,
+        termStdTotalWait: cfg.totalWaitStdWeight * stdTotalWait,
+        termSumQ: cfg.queueWeight * sumQ,
+        termStdQ: cfg.queueStdWeight * stdQ,
+      };
+      const score = costTerms.termTotalWait + costTerms.termStdTotalWait + costTerms.termSumQ + costTerms.termStdQ;
+      candidateResults.push({
+        phase: candidatePhase,
+        queuesAfter: Object.fromEntries(DIRECTIONS.map((d, k) => [d, qLens[k]])),
+        totalWaitAfter: Object.fromEntries(DIRECTIONS.map((d, k) => [d, totalWaits[k]])),
+        sumTotalWait,
+        stdTotalWait,
+        sumQ,
+        stdQ,
+        totalScore: score,
+        stepTrace,
+        costTerms,
+      });
       if (score < bestScore) {
         bestScore = score;
         bestPhase = candidatePhase;
@@ -607,11 +694,22 @@ export class GraphSimulationEngine {
 
     this.greedyDecisionData[inter.id] = {
       time: t,
-      queuesBefore: Object.fromEntries(DIRECTIONS.map((d) => [d, node.queues[d].length])),
+      queuesBefore,
+      totalWaitBefore,
+      departureRates: capsAt(t),
+      horizonInputs,
       candidateResults: candidateResults.map((c) => ({ ...c, isBest: c.phase === bestPhase })),
       bestPhase,
       bestScore,
+      weights: {
+        totalWaitWeight: cfg.totalWaitWeight,
+        totalWaitStdWeight: cfg.totalWaitStdWeight,
+        queueWeight: cfg.queueWeight,
+        queueStdWeight: cfg.queueStdWeight,
+      },
       lookaheadH: cfg.lookaheadH,
+      decisionState: 'end-of-step',
+      phaseAppliesFrom: t + 1,
     };
     state.rng.setState(savedRngState);
     return bestPhase;
@@ -677,11 +775,27 @@ export class GraphSimulationEngine {
       for (const [id, cars] of state.transit.entries()) out[id] = cars.length;
       return out;
     };
+    // Cars per road piece, for edges that say which pieces they run along.
+    const linkSnapshot = (state) => {
+      const out = {};
+      for (const edge of this.network.edges) {
+        const ends = edge.linkEnds;
+        if (!ends?.length) continue;
+        for (const car of state.transit.get(edge.id)) {
+          const elapsed = edge.travelSteps - car.transitCountdown;
+          let k = 0;
+          while (k < ends.length - 1 && elapsed >= ends[k].end) k += 1;
+          out[ends[k].linkId] = (out[ends[k].linkId] || 0) + 1;
+        }
+      }
+      return out;
+    };
     const policySnapshot = (pol, state) => {
       const gm = this.globalMetrics[pol];
       return {
         intersections: nodeSnapshot(state),
         edges: edgeSnapshot(state),
+        links: linkSnapshot(state),
         throughput: gm.throughput,
         totalVehiclesEntered: gm.totalVehiclesEntered,
         throughputTimeSeries: gm.throughputTimeSeries,
@@ -705,9 +819,17 @@ export class GraphSimulationEngine {
       perIntersectionMetrics: this.perIntersectionMetrics,
       greedyDecisionData: this.greedyDecisionData,
       inflowSeries: {
+        globalCap: this.config.inflowGlobalCap,
         entryKeys: this.entryKeys,
+        boundaryKeys: this.entryKeys,
+        boundaryKeyLabels: Object.fromEntries(this.network.entries.map((en) => [en.key, en.label || en.key])),
         plannedRateSeriesByKey: this.arrivalRateSeriesByKey,
         plannedTotalSeries: this.plannedTotalSeries,
+        plannedBoundaryArrivalsTotalSeries: this.plannedTotalSeries,
+        realizedBoundaryArrivals: {
+          fixed: { totalSeries: this.globalMetrics.fixed.realizedArrivalsTotalSeries, byKeySeries: this.globalMetrics.fixed.realizedArrivalsByKeySeries },
+          greedy: { totalSeries: this.globalMetrics.greedy.realizedArrivalsTotalSeries, byKeySeries: this.globalMetrics.greedy.realizedArrivalsByKeySeries },
+        },
       },
     };
   }

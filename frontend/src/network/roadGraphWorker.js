@@ -5,7 +5,7 @@ import { buildCityGraph } from './buildCityGraph.js';
 // Full road graph (whole download) → simulation network → city graph
 // (intersections inside the selected area + traced sources/sinks).
 self.onmessage = (event) => {
-  const { osmJson, area, downloadBox, options, simOptions } = event.data || {};
+  const { id, osmJson, area, downloadBox, options, simOptions } = event.data || {};
   try {
     const t0 = performance.now();
     const graph = buildRoadGraph(osmJson, { bbox: downloadBox, ...options });
@@ -16,8 +16,11 @@ self.onmessage = (event) => {
     const t2 = performance.now();
     const city = buildCityGraph(simnet, area);
     city.summary.buildMs = Math.round(performance.now() - t2);
-    self.postMessage({ ok: true, graph, simnet, city });
+    self.postMessage({ id, ok: true, graph, simnet, city });
   } catch (error) {
-    self.postMessage({ ok: false, error: error?.message || 'Graph build failed' });
+    self.postMessage({ id, ok: false, error: error?.message || 'Graph build failed' });
   }
 };
+
+// Tell the page the code has loaded (see utils/backgroundWorker.js).
+self.postMessage({ type: 'ready' });

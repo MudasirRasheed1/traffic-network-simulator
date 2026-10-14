@@ -175,7 +175,7 @@ function linkParameters(road, forward) {
     value: narrowest.value,
     source: combineSources(laneValues),
     detail: parts.length > 1
-      ? `${narrowest.detail} — narrowest of ${parts.length} OSM sections`
+      ? `${narrowest.detail}, narrowest of ${parts.length} OSM sections`
       : narrowest.detail,
   };
 

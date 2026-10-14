@@ -13,6 +13,7 @@ import { bboxAround, boxSizeKm, boxToPolygon, expandBox, polygonAreaKm2, polygon
 import { DETAIL_LEVELS, MODEL_CONSTANTS, ROAD_CLASSES } from '../../network/roadDefaults.js';
 import { DEFAULT_GRAPH_OPTIONS } from '../../network/buildRoadGraph.js';
 import { MAP_STYLES, useMapStyle } from './useMapStyle.js';
+import { createBackgroundWorker } from '../../utils/backgroundWorker.js';
 import styles from './NetworkExplorer.module.css';
 
 const DEFAULT_CENTER = [30.7398, 76.7827];
@@ -22,20 +23,12 @@ const MIN_SIDE_KM = 0.3;
 const VIEWS = { city: 'City graph', full: 'Full road graph' };
 const MAP_OPACITY = { on: 1, dim: 0.35, off: 0 };
 
+// Builds the graphs off the main thread. Started when the page opens and
+// reused, so it keeps working even if the dev server stops afterwards.
+const graphBuilder = createBackgroundWorker(() => new Worker(new URL('../../network/roadGraphWorker.js', import.meta.url), { type: 'module' }));
+
 function buildInWorker(osmJson, area, downloadBox, options, simOptions) {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('../../network/roadGraphWorker.js', import.meta.url), { type: 'module' });
-    worker.onmessage = (event) => {
-      worker.terminate();
-      if (event.data?.ok) resolve(event.data);
-      else reject(new Error(event.data?.error || 'Graph build failed'));
-    };
-    worker.onerror = (err) => {
-      worker.terminate();
-      reject(new Error(err.message || 'Graph worker crashed'));
-    };
-    worker.postMessage({ osmJson, area, downloadBox, options, simOptions });
-  });
+  return graphBuilder.run({ osmJson, area, downloadBox, options, simOptions }).promise;
 }
 
 function downloadJson(filename, payload) {
@@ -132,6 +125,7 @@ export default function NetworkExplorerPage() {
     if (!api.isAuthenticated()) navigate('/');
     else setAuthChecked(true);
   }, [navigate]);
+  useEffect(() => graphBuilder.warm(), []);
 
   const areaBox = polygonBBox(areaPolygon);
   const size = boxSizeKm(areaBox);
@@ -230,9 +224,9 @@ export default function NetworkExplorerPage() {
         detailLevel: detail,
         signal: controller.signal,
         onProgress: (p) => {
-          if (p.status === 'failed') pushStep(`${new URL(p.endpoint).host} failed (${p.error}) — trying next server…`, 'warn');
-          if (p.status === 'requesting' && p.attempt > 1) pushStep(`Trying ${new URL(p.endpoint).host}…`);
-          if (p.status === 'pause') pushStep('All servers busy — waiting a few seconds, then trying each once more…', 'warn');
+          if (p.status === 'failed') pushStep(`${new URL(p.endpoint).host} failed (${p.error}).`, 'warn');
+          if (p.status === 'requesting' && p.attempt > 1) pushStep(p.hedged ? `No answer yet. Also asking ${new URL(p.endpoint).host}…` : `Trying ${new URL(p.endpoint).host}…`);
+          if (p.status === 'pause') pushStep('All servers busy. Retrying shortly.', 'warn');
           if (p.status === 'cached') {
             pushStep(p.storedAt
               ? `Using the copy downloaded ${new Date(p.storedAt).toLocaleString()} (cached in this browser for 7 days).`
@@ -279,7 +273,7 @@ export default function NetworkExplorerPage() {
     try {
       pushStep(`Reading ${file.name}…`);
       const json = JSON.parse(await file.text());
-      if (!Array.isArray(json.elements)) throw new Error('Not an OpenStreetMap (Overpass JSON) file — it has no "elements" list.');
+      if (!Array.isArray(json.elements)) throw new Error('Not an OpenStreetMap (Overpass JSON) file.');
       const saved = json.urbangrid || {};
       const area = saved.area || { ...areaBox, polygon: areaPolygon };
       const downloadBox = saved.downloadBox || expandBox(area, DOWNLOAD_MARGIN_M);
@@ -359,7 +353,7 @@ export default function NetworkExplorerPage() {
             <h2>Select the area</h2>
             {drawMode ? (
               <div className={styles.drawBox}>
-                <strong>Drawing — {draftPoints.length} corner{draftPoints.length === 1 ? '' : 's'}</strong>
+                <strong>Drawing: {draftPoints.length} corner{draftPoints.length === 1 ? '' : 's'}</strong>
                 <span>Click on the map to add corners. To close the shape, click the first (green) corner, press Enter, or “Finish shape”. Backspace removes the last corner, Esc cancels.</span>
                 <div className={styles.extractRow}>
                   <button type="button" className={styles.primaryBtn} onClick={finishDrawing} disabled={draftPoints.length < 3}>Finish shape</button>
@@ -387,7 +381,7 @@ export default function NetworkExplorerPage() {
               <div className={styles.errorText}>
                 {size.widthKm < MIN_SIDE_KM || size.heightKm < MIN_SIDE_KM || areaKm2 < 0.1
                   ? 'Area too small.'
-                  : `Too large for the free map servers — keep each side under ${maxSide} km${detail === 'all' ? ' (or download main roads only)' : ''}.`}
+                  : `Too large for the free map servers. Keep each side under ${maxSide} km${detail === 'all' ? ' (or download main roads only)' : ''}.`}
               </div>
             )}
             <label className={styles.fieldLabel}>Download</label>
@@ -438,8 +432,8 @@ export default function NetworkExplorerPage() {
                   <StatTile label="Sources" value={c.sources} color={CITY_COLORS.feeder} />
                   <StatTile label="Sinks" value={c.sinks} color={CITY_COLORS.exit} />
                   <StatTile label="Roundabouts" value={c.fromRoundabouts} color={CITY_COLORS.roundaboutRing} />
-                  <StatTile label="Roads" value={c.internalEdges} />
-                  <StatTile label="Feeders" value={c.feederEdges} color={CITY_COLORS.feeder} />
+                  <StatTile label="Roads" value={c.roads} />
+                  <StatTile label="Junctions" value={c.junctions} color={CITY_COLORS.junction} />
                   <StatTile label="Road length" value={`${c.roadKm} km`} />
                 </div>
                 {city.warnings.map((w) => <div key={w} className={styles.warnText}>{w}</div>)}
@@ -457,7 +451,7 @@ export default function NetworkExplorerPage() {
                   ))}
                   <li className={styles.funnelFinal}>
                     <span>City graph</span><strong>{c.intersections} intersections</strong>
-                    <span>{c.internalEdges} roads between them · {c.feederEdges} feeders from {c.sources} sources · {c.exitEdges} exits to {c.sinks} sinks</span>
+                    <span>{c.roads} roads · {c.junctions} junctions without signal · {c.sources} sources · {c.sinks} sinks</span>
                   </li>
                 </ol>
                 <div className={styles.downloadRow}>
@@ -562,7 +556,7 @@ export default function NetworkExplorerPage() {
             onDraftClose={finishDrawing}
             onDraftCancel={cancelDrawing}
             fitTarget={fitTarget}
-            mapOpacity={view === 'city' ? MAP_OPACITY[mapMode] : 1}
+            mapOpacity={view === 'city' && city ? MAP_OPACITY[mapMode] : 1}
             mapStyle={mapStyle}
           />
           {graph && (

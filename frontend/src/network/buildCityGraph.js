@@ -8,24 +8,276 @@
 //   gateways       where traffic enters / leaves: the first real
 //                  junction outside the area along each road
 //                  (traced outward, never the arbitrary box edge)
-//   edges          directed roads intersection→intersection,
-//                  gateway→intersection (feeder) and
-//                  intersection→gateway (exit)
+//   junctions      points where roads join or split without a signal
+//   links          directed pieces of road between those nodes
 //
-// Merge/split points inside the area are folded into the roads
-// that pass through them; anything that never reaches an
+// The result is the editable model of cityModel.js; the routes the
+// engine uses are derived from it. Anything that never reaches an
 // intersection is dropped.
 // =====================================================
 
 import { MODEL_CONSTANTS, SOURCES, roadClassInfo } from './roadDefaults.js';
-import { LEFT_EXIT, PHASES, RIGHT_EXIT, THROUGH_EXIT } from '../simulation/constants.js';
+import { LEFT_EXIT, THROUGH_EXIT } from '../simulation/constants.js';
 import { GRID_DIRS, findCrossingConflict } from './buildSimulationNetwork.js';
-import { isInsideArea } from './geo.js';
+import { deriveCity, pairDividedRoads } from './cityModel.js';
+import { angleDiff, bearingDeg, compassLabel, haversineM, isInsideArea } from './geo.js';
 
 export const DEFAULT_CITY_OPTIONS = {
   maxTraceM: 2500, // give up following a road after this distance
   minFeederM: 200, // a source/sink closer than this is skipped for the next junction
+  mergeGatewayM: 120, // source and sink of the same road end closer than this become one
+  turnLaneM: 80, // a road joining or leaving another this close to an intersection is one of its turns
 };
+
+const DIR_ANGLE = { N: 0, E: 90, S: 180, W: 270 };
+// Arm of an intersection that an edge leaves from / arrives on.
+const startArm = (e) => e.startArm ?? e.path[0].fromArm;
+const endArm = (e) => e.endArm ?? e.path[e.path.length - 1].toArm;
+const sumLength = (links) => links.reduce((t, l) => t + l.lengthM, 0);
+
+function commonPrefix(a, b) {
+  let k = 0;
+  while (k < a.length && k < b.length && a[k].id === b[k].id) k += 1;
+  return k;
+}
+function commonSuffix(a, b) {
+  let k = 0;
+  while (k < a.length && k < b.length && a[a.length - 1 - k].id === b[b.length - 1 - k].id) k += 1;
+  return k;
+}
+
+// Which arm of intersection `node` a road lying at `bearing` uses, given
+// the turn it makes. The arm that makes the turn a free left is preferred
+// when the road really lies roughly there; otherwise the nearest arm.
+function pickTurnArm(node, bearing, wantedArm, takenArm) {
+  const rotation = node.ref.frameRotation || 0;
+  const off = (dir) => Math.abs(angleDiff(DIR_ANGLE[dir] + rotation, bearing));
+  if (wantedArm && off(wantedArm) <= 75) return wantedArm;
+  return GRID_DIRS.filter((d) => d !== takenArm).sort((a, b) => off(a) - off(b))[0];
+}
+
+// ---------------------------------------------------------------
+// Turn lanes
+//
+// A free-left (slip) lane is drawn in OSM as its own little road that
+// leaves the approach just before an intersection and/or joins the exit
+// road just after it. Traced naively it becomes a direct road between
+// the intersections on either side, skipping the one it belongs to and
+// duplicating the road it joins. Here such a road is given back to its
+// intersection X:
+//   leaves A→X near X and joins X→C near X : it is the turn itself, dropped
+//   only joins X→C near X                 : becomes A→X on its own arm
+//   only leaves A→X near X                : becomes X→C on its own arm
+// and X is told which turn it stands for.
+// ---------------------------------------------------------------
+function absorbTurnLanes(edges, nodes, isCore, maxM) {
+  const result = [];
+  const extraShare = new Map(); // edge -> share taken over from a dropped turn lane
+  const allow = new Map(); // core -> Set('from>to') turns that must exist
+  const newArms = new Map(); // core -> Map(dir -> arm info)
+  let absorbed = 0;
+
+  const noteArm = (core, dir, bearing, path) => {
+    if (nodes.get(core).ref.arms?.[dir]) return;
+    if (!newArms.has(core)) newArms.set(core, new Map());
+    if (newArms.get(core).has(dir)) return;
+    const main = path.slice().sort((a, b) => roadClassInfo(b.highway).rank - roadClassInfo(a.highway).rank)[0];
+    newArms.get(core).set(dir, {
+      dir,
+      bearing: Math.round(bearing),
+      compass: compassLabel(bearing),
+      name: path.find((l) => l.name)?.name || null,
+      highway: main.highway,
+      joinedArms: 1,
+      inLanes: 0,
+      outLanes: 0,
+      turnLane: true,
+    });
+  };
+  // Direction (seen from the intersection) in which a path lies, judged a
+  // little way along it so the curve of the turn itself does not mislead.
+  const bearingOfPath = (core, path, fromEnd) => {
+    const coords = path.flatMap((l, i) => (i === 0 ? l.coords : l.coords.slice(1)));
+    const ordered = fromEnd ? coords.slice().reverse() : coords;
+    const c = nodes.get(core);
+    const far = ordered.find((pt) => haversineM(c.lat, c.lon, pt[0], pt[1]) >= 60) || ordered[ordered.length - 1];
+    return bearingDeg(c.lat, c.lon, far[0], far[1]);
+  };
+
+  for (const e of edges) {
+    let join = null; // joins g: X→C close to X
+    let leave = null; // leaves f: A→X close to X
+    for (const g of edges) {
+      if (g === e || !isCore(g.from) || g.from === e.from || g.from === e.to) continue;
+      const k = commonSuffix(e.path, g.path);
+      if (k === 0 || k >= e.path.length || k >= g.path.length) continue;
+      const dist = sumLength(g.path.slice(0, g.path.length - k));
+      if (dist <= maxM && (!join || dist < join.dist)) join = { g, k, dist, core: g.from };
+    }
+    for (const f of edges) {
+      if (f === e || !isCore(f.to) || f.to === e.from || f.to === e.to) continue;
+      const k = commonPrefix(e.path, f.path);
+      if (k === 0 || k >= e.path.length || k >= f.path.length) continue;
+      const dist = sumLength(f.path.slice(k));
+      if (dist <= maxM && (!leave || dist < leave.dist)) leave = { f, k, dist, core: f.to };
+    }
+
+    if (join && leave && join.core === leave.core && join.k + leave.k <= e.path.length) {
+      // The whole road is one turn at X: A→X, turn, X→C already exist.
+      const from = endArm(leave.f);
+      const to = startArm(join.g);
+      if (from && to && from !== to) {
+        extraShare.set(leave.f, (extraShare.get(leave.f) || 0) + e.share);
+        if (!allow.has(join.core)) allow.set(join.core, new Set());
+        allow.get(join.core).add(`${from}>${to}`);
+        absorbed += 1;
+        continue;
+      }
+    }
+    if (join) {
+      const exitArm = startArm(join.g);
+      const path = e.path.slice(0, e.path.length - join.k);
+      const bearing = bearingOfPath(join.core, path, true);
+      const wanted = GRID_DIRS.find((d) => LEFT_EXIT[d] === exitArm);
+      const arm = pickTurnArm(nodes.get(join.core), bearing, wanted, exitArm);
+      if (exitArm && arm) {
+        noteArm(join.core, arm, bearing, path);
+        result.push({ ...e, to: join.core, kind: isCore(e.from) ? 'internal' : 'feeder', path, endArm: arm, turnTo: exitArm });
+        absorbed += 1;
+        continue;
+      }
+    }
+    if (leave) {
+      const entryArm = endArm(leave.f);
+      const path = e.path.slice(leave.k);
+      const bearing = bearingOfPath(leave.core, path, false);
+      const arm = pickTurnArm(nodes.get(leave.core), bearing, LEFT_EXIT[entryArm], entryArm);
+      if (entryArm && arm) {
+        noteArm(leave.core, arm, bearing, path);
+        extraShare.set(leave.f, (extraShare.get(leave.f) || 0) + e.share);
+        result.push({ ...e, from: leave.core, kind: isCore(e.to) ? 'internal' : 'exit', path, share: 1, startArm: arm, turnFrom: entryArm });
+        absorbed += 1;
+        continue;
+      }
+    }
+    result.push(e);
+  }
+  const out = result.map((e) => (extraShare.has(e) ? { ...e, share: Math.min(1, e.share + extraShare.get(e)) } : e));
+  // Shares were keyed by the original objects; rewritten copies keep theirs.
+  return { edges: out, absorbed, allow, newArms };
+}
+
+const endsWith = (long, short) => long.length > short.length && short.every((l, k) => long[long.length - short.length + k].id === l.id);
+const startsWith = (long, short) => long.length > short.length && short.every((l, k) => long[k].id === l.id);
+
+// A feeder that is only the last stretch of another road into the same
+// intersection (or an exit that is only the first stretch of another road
+// out of it) adds a second line on top of that road. This happens where a
+// road briefly leaves the selected area. Such edges are dropped.
+function dropOverlappingEdges(edges) {
+  return edges.filter((e) => {
+    if (e.kind === 'feeder') return !edges.some((f) => f !== e && f.to === e.to && endsWith(f.path, e.path));
+    if (e.kind === 'exit') return !edges.some((f) => f !== e && f.from === e.from && startsWith(f.path, e.path));
+    return true;
+  });
+}
+
+// A road between two intersections that runs outside the selected area
+// for a while is traced as a way out (to a sink) and a way in (from a
+// source) that overlap in the middle. It is one road: the two are joined.
+function joinThroughRoads(edges, isCore) {
+  const usedFeeders = new Set();
+  const joined = [];
+  const out = [];
+  for (const e of edges) {
+    if (e.kind !== 'exit') { out.push(e); continue; }
+    let made = false;
+    for (const f of edges) {
+      if (f.kind !== 'feeder' || !isCore(f.to) || f.to === e.from) continue;
+      // Longest end of the way out that is also the start of the way in.
+      let k = Math.min(e.path.length, f.path.length);
+      while (k > 0 && !f.path.slice(0, k).every((l, n) => e.path[e.path.length - k + n].id === l.id)) k -= 1;
+      if (!k) continue;
+      joined.push({ ...e, to: f.to, kind: 'internal', path: [...e.path, ...f.path.slice(k)], endArm: f.endArm, turnTo: f.turnTo });
+      usedFeeders.add(f);
+      made = true;
+    }
+    if (!made) out.push(e);
+  }
+  return { edges: [...out.filter((e) => !usedFeeders.has(e)), ...joined], count: joined.length };
+}
+
+// Divided roads are two one-way carriageways in OSM, so the traffic
+// leaving an arm and the traffic entering it can be traced to two
+// different points along the road. Gateways serving the same arm of the
+// same intersection are merged into one when they are within `maxM` of
+// each other, or when one only sends traffic in and the other only takes
+// it out and both lie in the same direction from the intersection.
+// Returns a map gateway simId -> merged node.
+const SAME_DIRECTION_DEG = 30;
+const angleBetween = (c, a, b) => Math.abs(angleDiff(bearingDeg(c.lat, c.lon, a.lat, a.lon), bearingDeg(c.lat, c.lon, b.lat, b.lon)));
+
+function mergeGatewayEnds(edges, nodes, isCore, maxM) {
+  const byArm = new Map();
+  const add = (core, arm, gatewayId, way) => {
+    const key = `${core}|${arm}`;
+    if (!byArm.has(key)) byArm.set(key, { core, ways: new Map() });
+    const ways = byArm.get(key).ways;
+    if (!ways.has(gatewayId)) ways.set(gatewayId, new Set());
+    ways.get(gatewayId).add(way);
+  };
+  for (const e of edges) {
+    if (e.kind === 'feeder' && isCore(e.to)) add(e.to, endArm(e), e.from, 'in');
+    if (e.kind === 'exit' && isCore(e.from)) add(e.from, startArm(e), e.to, 'out');
+  }
+  const parent = new Map();
+  const find = (x) => {
+    while (parent.get(x) !== x) x = parent.get(x);
+    return x;
+  };
+  for (const { core, ways } of byArm.values()) {
+    const c = nodes.get(core);
+    const list = Array.from(ways.keys());
+    for (const id of list) if (!parent.has(id)) parent.set(id, id);
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = nodes.get(list[i]);
+        const b = nodes.get(list[j]);
+        const wa = ways.get(list[i]);
+        const wb = ways.get(list[j]);
+        const inAndOut = wa.size === 1 && wb.size === 1 && [...wa][0] !== [...wb][0];
+        const close = haversineM(a.lat, a.lon, b.lat, b.lon) <= maxM;
+        if (close || (inAndOut && angleBetween(c, a, b) <= SAME_DIRECTION_DEG)) parent.set(find(list[i]), find(list[j]));
+      }
+    }
+  }
+  const groups = new Map();
+  for (const id of parent.keys()) {
+    const root = find(id);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(id);
+  }
+  const merged = new Map();
+  for (const members of groups.values()) {
+    if (members.length < 2) continue;
+    const pts = members.map((id) => nodes.get(id));
+    const junctions = pts.filter((n) => n.kind !== 'edge');
+    // Sit on one of the real junctions (a midpoint could fall inside the area).
+    const at = junctions.find((n) => n.name) || junctions[0] || pts[0];
+    const node = {
+      id: `merged:${members.sort().join('+')}`,
+      kind: junctions.length ? 'merge' : 'edge',
+      lat: at.lat,
+      lon: at.lon,
+      name: (junctions.find((n) => n.name) || pts.find((n) => n.name))?.name || null,
+      inside: false,
+      members,
+    };
+    nodes.set(node.id, node);
+    for (const id of members) merged.set(id, node.id);
+  }
+  return merged;
+}
 
 
 function combineSource(values) {
@@ -82,9 +334,10 @@ export function buildCityGraph(simnet, innerBox, userOptions = {}) {
     if (!newlyDemoted.length) break;
     newlyDemoted.forEach((id) => demoted.add(id));
   }
+  result.extraction.summary.noLongerCrossing = demoted.size;
   result.summary.noLongerCrossing = demoted.size;
   if (demoted.size) {
-    result.log.splice(result.log.length - 0, 0, { step: 'No crossing traffic', detail: `${demoted.size} junction(s) where traffic only merges or splits were folded into the roads` });
+    result.log.push({ step: 'No crossing traffic', detail: `${demoted.size} junction(s) where traffic only merges or splits need no signal` });
   }
   return result;
 }
@@ -247,16 +500,19 @@ function assembleCityGraph(simnet, innerBox, options, demoted) {
     for (const l of inLinks.get(id) || []) traceBackward(id, l);
   }
 
+  // ---- Turn lanes belong to the intersection they bypass ---------
+  const turnLanes = absorbTurnLanes(rawEdges, nodes, isCore, options.turnLaneM);
+
   // ---- Intersections left with ≤ 2 arms are just a road passing
   // through: join their roads. A road that would then run gateway →
   // gateway without meeting an intersection is dropped.
-  let edges = rawEdges;
+  let edges = turnLanes.edges;
   let passThrough = 0;
   const armsOf = (core) => {
     const arms = new Set();
     for (const e of edges) {
-      if (e.to === core) arms.add(e.path[e.path.length - 1].toArm);
-      if (e.from === core) arms.add(e.path[0].fromArm);
+      if (e.to === core) arms.add(endArm(e));
+      if (e.from === core) arms.add(startArm(e));
     }
     return arms;
   };
@@ -270,7 +526,7 @@ function assembleCityGraph(simnet, innerBox, options, demoted) {
       const joined = [];
       for (const a of ins) {
         for (const b of outs) {
-          if (a.path[a.path.length - 1].toArm === b.path[0].fromArm || a.from === b.to) continue;
+          if (endArm(a) === startArm(b) || a.from === b.to) continue;
           const fromCore = isCore(a.from);
           const toCore = isCore(b.to);
           if (!fromCore && !toCore) continue;
@@ -280,6 +536,10 @@ function assembleCityGraph(simnet, innerBox, options, demoted) {
             kind: fromCore && toCore ? 'internal' : fromCore ? 'exit' : 'feeder',
             path: [...a.path, ...b.path],
             share: a.share * b.share,
+            startArm: a.startArm,
+            endArm: b.endArm,
+            turnFrom: a.turnFrom,
+            turnTo: b.turnTo,
           });
         }
       }
@@ -288,6 +548,13 @@ function assembleCityGraph(simnet, innerBox, options, demoted) {
       changed = true;
     }
   }
+
+  const through = joinThroughRoads(edges, isCore);
+  edges = through.edges;
+
+  const beforeOverlap = edges.length;
+  edges = dropOverlappingEdges(edges);
+  const overlapping = beforeOverlap - edges.length;
 
   // ---- Prune: every intersection must take traffic in and send it on,
   // and be reachable from a gateway and able to reach one.
@@ -318,167 +585,183 @@ function assembleCityGraph(simnet, innerBox, options, demoted) {
     edges = edges.filter((e) => !deadSet.has(e.from) && !deadSet.has(e.to));
   }
 
-  // ---- Build output objects ------------------------------------
+  // ---- One source/sink per road end ------------------------------
+  const mergedInto = mergeGatewayEnds(edges, nodes, isCore, options.mergeGatewayM);
+  if (mergedInto.size) {
+    edges = edges.map((e) => ({ ...e, from: mergedInto.get(e.from) ?? e.from, to: mergedInto.get(e.to) ?? e.to }));
+  }
+  const mergedGateways = new Set(mergedInto.values()).size;
+
+  // ---- Physical road pieces --------------------------------------
+  // Routes that share a stretch of road share the same sim links. A point
+  // on the way where three or more road branches meet is a junction (no
+  // signal); every route through it is cut there and identical pieces
+  // become one road, so both directions of a road meet at the same dot.
+  const branches = new Map(); // point a route passes -> the points next to it on any route
+  for (const e of edges) {
+    for (let k = 0; k + 1 < e.path.length; k++) {
+      const point = e.path[k].to;
+      if (!branches.has(point)) branches.set(point, new Set());
+      branches.get(point).add(e.path[k].from).add(e.path[k + 1].to);
+    }
+  }
+  // Three or more road branches meeting: roads join, split or fork there.
+  const junctionSims = new Set(Array.from(branches.entries()).filter(([, around]) => around.size >= 3).map(([point]) => point));
+
   const usedCores = new Set();
   const usedGateways = new Set();
   for (const e of edges) {
     for (const id of [e.from, e.to]) (isCore(id) ? usedCores : usedGateways).add(id);
   }
-  const byPosition = (a, b) => (nodes.get(b).lat - nodes.get(a).lat) || (nodes.get(a).lon - nodes.get(b).lon);
+  const byPosition = (x, y) => (nodes.get(y).lat - nodes.get(x).lat) || (nodes.get(x).lon - nodes.get(y).lon);
   const intersectionId = new Map(Array.from(usedCores).sort(byPosition).map((id, k) => [id, `I${k + 1}`]));
   const gatewayId = new Map(Array.from(usedGateways).sort(byPosition).map((id, k) => [id, `G${k + 1}`]));
+  const junctionId = new Map(Array.from(junctionSims).sort(byPosition).map((id, k) => [id, `J${k + 1}`]));
   const idOf = (simId) => intersectionId.get(simId) || gatewayId.get(simId);
 
-  const outEdges = edges.map((e, k) => {
-    const first = e.path[0];
-    const last = e.path[e.path.length - 1];
+  const pieceByKey = new Map();
+  const pieces = [];
+  const turnsGiven = new Map(); // intersection sim id -> [{ from, to }] turns a turn lane stands for
+  const giveTurn = (core, from, to) => {
+    if (!turnsGiven.has(core)) turnsGiven.set(core, []);
+    turnsGiven.get(core).push({ from, to });
+  };
+  for (const e of edges) {
+    const cuts = [0];
+    for (let k = 0; k + 1 < e.path.length; k++) if (junctionSims.has(e.path[k].to)) cuts.push(k + 1);
+    cuts.push(e.path.length);
+    let previous = null;
+    for (let c = 0; c + 1 < cuts.length; c++) {
+      const path = e.path.slice(cuts[c], cuts[c + 1]);
+      const isFirst = c === 0;
+      const isLast = c + 2 === cuts.length;
+      const from = isFirst ? idOf(e.from) : junctionId.get(e.path[cuts[c] - 1].to);
+      const to = isLast ? idOf(e.to) : junctionId.get(path[path.length - 1].to);
+      const key = `${from}|${to}|${path.map((l) => l.id).join(',')}`;
+      let piece = pieceByKey.get(key);
+      if (!piece) {
+        piece = {
+          from,
+          to,
+          path,
+          fromArm: isFirst && isCore(e.from) ? startArm(e) : null,
+          toArm: isLast && isCore(e.to) ? endArm(e) : null,
+          turnLane: false,
+          next: new Map(),
+        };
+        pieceByKey.set(key, piece);
+        pieces.push(piece);
+      }
+      if (isLast && isCore(e.to) && e.turnTo) {
+        piece.turnLane = true;
+        piece.turnTo = e.turnTo;
+        giveTurn(e.to, endArm(e), e.turnTo);
+      }
+      if (isFirst && isCore(e.from) && e.turnFrom) {
+        piece.turnLane = true;
+        piece.turnFrom = e.turnFrom;
+        giveTurn(e.from, e.turnFrom, startArm(e));
+      }
+      if (previous) previous.next.set(piece, (previous.next.get(piece) || 0) + e.share);
+      previous = piece;
+    }
+  }
+  pieces.forEach((piece, k) => { piece.id = `L${k + 1}`; });
+  const modelLinks = pieces.map((piece) => {
+    const { share: _share, ...attrs } = pathToEdge(piece.path, 1);
     return {
-      id: `E${k + 1}`,
-      from: idOf(e.from),
-      to: idOf(e.to),
-      kind: e.kind,
-      fromArm: isCore(e.from) ? first.fromArm : null,
-      toArm: isCore(e.to) ? last.toArm : null,
-      ...pathToEdge(e.path, e.share),
+      id: piece.id,
+      from: piece.from,
+      to: piece.to,
+      fromArm: piece.fromArm,
+      toArm: piece.toArm,
+      ...attrs,
+      turnLane: piece.turnLane,
+      next: piece.next.size ? Object.fromEntries(Array.from(piece.next.entries()).map(([nxt, w]) => [nxt.id, Math.round(w * 1000) / 1000])) : null,
     };
   });
 
-  const intersections = Array.from(usedCores).map((simId) => {
+  // Turns each intersection does not offer: the map's restrictions, and
+  // for an arm made only of turn lanes everything but the turn they make.
+  const blockedTurnsOf = (simId) => {
     const src = nodes.get(simId).ref;
-    const id = intersectionId.get(simId);
-    const arms = {};
+    const blocked = new Set(src.movements.filter((m) => !m.allowed).map((m) => `${m.from}>${m.to}`));
     for (const dir of GRID_DIRS) {
-      const a = src.arms[dir];
-      if (!a) continue;
-      const inEdgeIds = outEdges.filter((e) => e.to === id && e.toArm === dir).map((e) => e.id);
-      const outEdgeIds = outEdges.filter((e) => e.from === id && e.fromArm === dir).map((e) => e.id);
-      if (!inEdgeIds.length && !outEdgeIds.length) continue;
-      const lanesOf = (ids) => ids.reduce((s, eid) => {
-        const e = outEdges.find((x) => x.id === eid);
-        return s + e.lanes.value;
-      }, 0);
-      arms[dir] = {
-        dir,
-        bearing: a.bearing,
-        compass: a.compass,
-        name: a.name,
-        highway: a.highway,
-        joinedArms: a.joinedArms,
-        inEdgeIds,
-        outEdgeIds,
-        // Several edges can leave one arm when a road splits further on.
-        inLanes: a.inLanes,
-        outLanes: a.outLanes,
-        edgeLanesIn: lanesOf(inEdgeIds),
-      };
-    }
-    const movements = [];
-    for (const from of GRID_DIRS) {
-      if (!arms[from]?.inEdgeIds.length) continue;
-      for (const [turn, exitMap] of [['L', LEFT_EXIT], ['T', THROUGH_EXIT], ['R', RIGHT_EXIT]]) {
-        const to = exitMap[from];
-        if (!arms[to]?.outEdgeIds.length) continue;
-        const original = src.movements.find((m) => m.from === from && m.to === to);
-        movements.push({ from, to, turn, allowed: original ? original.allowed : true, reason: original?.reason || null });
+      const arriving = pieces.filter((x) => x.to === intersectionId.get(simId) && x.toArm === dir);
+      if (arriving.length && arriving.every((x) => x.turnTo)) {
+        for (const to of GRID_DIRS) if (to !== dir && !arriving.some((x) => x.turnTo === to)) blocked.add(`${dir}>${to}`);
+      }
+      const leaving = pieces.filter((x) => x.from === intersectionId.get(simId) && x.fromArm === dir);
+      if (leaving.length && leaving.every((x) => x.turnFrom)) {
+        for (const from of GRID_DIRS) if (from !== dir && !leaving.some((x) => x.turnFrom === from)) blocked.add(`${from}>${dir}`);
       }
     }
-    const allowedSet = new Set(movements.filter((m) => m.allowed).map((m) => `${m.from}${m.turn}`));
-    const phases = Object.entries(PHASES)
-      .map(([name, moves]) => {
-        const served = moves.filter(([approach, mv]) => allowedSet.has(`${approach}${mv}`));
-        return { name, served: served.map(([ap, mv]) => `${ap}${mv}`), partial: served.length < moves.length };
-      })
-      .filter((p) => p.served.length > 0);
-    return {
-      id,
-      simId,
-      lat: src.lat,
-      lon: src.lon,
-      name: src.name,
-      originalKind: src.originalKind,
-      osmSignal: src.osmSignal,
-      frameRotation: src.frameRotation,
-      originalArmCount: src.originalArmCount,
-      armCount: Object.keys(arms).length,
-      arms,
-      movements,
-      phases,
-      sourceJunctionId: src.sourceJunctionId,
-    };
-  }).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
-
-  const gateways = Array.from(usedGateways).map((simId) => {
-    const n = nodes.get(simId);
-    const id = gatewayId.get(simId);
-    const feederEdgeIds = outEdges.filter((e) => e.from === id).map((e) => e.id);
-    const exitEdgeIds = outEdges.filter((e) => e.to === id).map((e) => e.id);
-    const roadName = outEdges.find((e) => e.from === id || e.to === id)?.name || null;
-    return {
-      id,
-      lat: n.lat,
-      lon: n.lon,
-      role: feederEdgeIds.length && exitEdgeIds.length ? 'both' : feederEdgeIds.length ? 'source' : 'sink',
-      placedAt: n.kind === 'edge' ? 'download-edge' : 'junction',
-      junctionName: n.kind === 'edge' ? null : n.name,
-      roadName,
-      feederEdgeIds,
-      exitEdgeIds,
-    };
-  }).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
-
-  // Road pairs for drawing: both directions between the same two nodes.
-  const roads = [];
-  const roadByKey = new Map();
-  for (const e of outEdges) {
-    const key = [e.from, e.to].sort().join('~');
-    let road = roadByKey.get(key);
-    if (!road) {
-      road = { id: `R${roads.length + 1}`, a: e.from, b: e.to, edgeIds: [], kind: e.kind === 'internal' ? 'internal' : 'boundary' };
-      roads.push(road);
-      roadByKey.set(key, road);
-    }
-    road.edgeIds.push(e.id);
-    e.roadId = road.id;
-  }
-
-  const summary = {
-    intersections: intersections.length,
-    armsHistogram: intersections.reduce((acc, i) => ({ ...acc, [i.armCount]: (acc[i.armCount] || 0) + 1 }), {}),
-    fromRoundabouts: intersections.filter((i) => i.originalKind === 'roundabout').length,
-    sources: gateways.filter((g) => g.role !== 'sink').length,
-    sinks: gateways.filter((g) => g.role !== 'source').length,
-    gateways: gateways.length,
-    internalEdges: outEdges.filter((e) => e.kind === 'internal').length,
-    feederEdges: outEdges.filter((e) => e.kind === 'feeder').length,
-    exitEdges: outEdges.filter((e) => e.kind === 'exit').length,
-    roadKm: Math.round(outEdges.filter((e) => e.kind === 'internal').reduce((s, e) => s + e.lengthM, 0) / 100) / 10,
-    gatewaysAtDownloadEdge: gateways.filter((g) => g.placedAt === 'download-edge').length,
-    removedIntersections: removedCores,
-    passThroughJoined: passThrough,
-    abandonedTraces: abandoned,
+    for (const key of turnLanes.allow.get(simId) || []) blocked.delete(key);
+    for (const t of turnsGiven.get(simId) || []) blocked.delete(`${t.from}>${t.to}`);
+    return Array.from(blocked).sort();
   };
 
-  log.push({ step: 'Intersections', detail: `${intersections.length} signalized intersection(s) inside your area` });
-  log.push({ step: 'Roads between them', detail: `${summary.internalEdges} directed road(s); merge/split points folded into the roads` });
-  log.push({ step: 'Traffic in and out', detail: `${summary.feederEdges} feeder and ${summary.exitEdges} exit road(s), traced out to the previous junction (${summary.sources} source(s), ${summary.sinks} sink(s))` });
+  const modelNodes = [
+    ...Array.from(usedCores).map((simId) => {
+      const src = nodes.get(simId).ref;
+      return {
+        id: intersectionId.get(simId),
+        kind: 'intersection',
+        lat: src.lat,
+        lon: src.lon,
+        name: src.name,
+        frameRotation: src.frameRotation,
+        originalKind: src.originalKind,
+        osmSignal: src.osmSignal,
+        originalArmCount: src.originalArmCount,
+        sourceJunctionId: src.sourceJunctionId,
+        simId,
+        blockedTurns: blockedTurnsOf(simId),
+      };
+    }),
+    ...Array.from(junctionSims).map((simId) => {
+      const n = nodes.get(simId);
+      return { id: junctionId.get(simId), kind: 'junction', lat: n.lat, lon: n.lon, name: n.name || null, simId };
+    }),
+    ...Array.from(usedGateways).map((simId) => {
+      const n = nodes.get(simId);
+      return { id: gatewayId.get(simId), kind: 'gateway', lat: n.lat, lon: n.lon, name: n.kind === 'edge' ? null : n.name, placedAt: n.kind === 'edge' ? 'download-edge' : 'junction', simId };
+    }),
+  ].sort((x, y) => x.id[0].localeCompare(y.id[0]) || Number(x.id.slice(1)) - Number(y.id.slice(1)));
+
+  const atDownloadEdge = modelNodes.filter((n) => n.placedAt === 'download-edge').length;
+  const feeders = edges.filter((e) => e.kind === 'feeder').length;
+  const exits = edges.filter((e) => e.kind === 'exit').length;
+  log.push({ step: 'Intersections', detail: `${usedCores.size} signalized intersection(s) inside your area` });
+  log.push({ step: 'Roads', detail: `${modelLinks.length} road piece(s); ${junctionSims.size} junction(s) without signal where roads join or split` });
+  log.push({ step: 'Traffic in and out', detail: `${feeders} way(s) in and ${exits} way(s) out, traced to the previous junction outside the area` });
+  if (turnLanes.absorbed) log.push({ step: 'Turn lanes', detail: `${turnLanes.absorbed} turn lane(s) that skipped an intersection now arrive at it and turn there` });
+  if (through.count) log.push({ step: 'Roads rejoined', detail: `${through.count} road(s) between two intersections that leave the area and come back` });
+  if (overlapping) log.push({ step: 'Overlaps removed', detail: `${overlapping} source/sink road(s) that ran on top of another road` });
+  if (mergedGateways) log.push({ step: 'Road ends merged', detail: `${mergedGateways} source/sink pair(s) at the two carriageways of one road` });
   if (passThrough) log.push({ step: 'Joined', detail: `${passThrough} point(s) with only two arms were just a road passing through` });
   if (removedCores) log.push({ step: 'Dropped', detail: `${removedCores} intersection(s) that traffic could not pass through` });
 
   const warnings = [];
-  if (!intersections.length) warnings.push('No signalized intersections inside the selected area. Make the box larger or move it over main roads.');
-  if (summary.gatewaysAtDownloadEdge) warnings.push(`${summary.gatewaysAtDownloadEdge} road(s) had no junction within the extra download margin; their source/sink sits at the margin edge.`);
+  if (!usedCores.size) warnings.push('No signalized intersections inside the selected area. Make the box larger or move it over main roads.');
+  if (atDownloadEdge) warnings.push(`${atDownloadEdge} road(s) had no junction within the extra download margin; their source/sink sits at the margin edge.`);
 
-  return {
-    schemaVersion: 1,
-    kind: 'city-graph',
+  return deriveCity({
     area: innerBox,
     downloadBox: simnet.bbox,
-    intersections,
-    gateways,
-    edges: outEdges,
-    roads,
-    summary,
-    log,
-    warnings,
-  };
+    model: pairDividedRoads({ nodes: modelNodes, links: modelLinks }),
+    extraction: {
+      summary: {
+        removedIntersections: removedCores,
+        passThroughJoined: passThrough,
+        abandonedTraces: abandoned,
+        overlappingDropped: overlapping,
+        throughRoadsJoined: through.count,
+        turnLanesAbsorbed: turnLanes.absorbed,
+        gatewaysMerged: mergedGateways,
+      },
+      log,
+      warnings,
+    },
+  });
 }

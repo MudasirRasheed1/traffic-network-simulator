@@ -4,7 +4,7 @@ import { engineConfig } from './cityNetwork.js';
 import { policySummary } from './cityMetrics.js';
 
 self.onmessage = (event) => {
-  const { city, config, overrides, inflows, seeds } = event.data;
+  const { id, city, config, overrides, inflows, seeds } = event.data;
   try {
     const runs = [];
     seeds.forEach((seed, k) => {
@@ -14,13 +14,16 @@ self.onmessage = (event) => {
       const snap = engine.getSnapshot();
       runs.push({
         seed,
-        fixed: policySummary(snap.fixed, config.stepSeconds),
-        greedy: policySummary(snap.greedy, config.stepSeconds),
+        fixed: policySummary(snap.fixed),
+        greedy: policySummary(snap.greedy),
       });
-      self.postMessage({ type: 'progress', done: k + 1, total: seeds.length });
+      self.postMessage({ id, type: 'progress', done: k + 1, total: seeds.length });
     });
-    self.postMessage({ type: 'done', runs });
+    self.postMessage({ id, type: 'done', runs });
   } catch (error) {
-    self.postMessage({ type: 'error', error: error?.message || 'Batch run failed' });
+    self.postMessage({ id, type: 'error', error: error?.message || 'Batch run failed' });
   }
 };
+
+// Tell the page the code has loaded (see utils/backgroundWorker.js).
+self.postMessage({ type: 'ready' });

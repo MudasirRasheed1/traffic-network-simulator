@@ -3,26 +3,27 @@
 
 const mean = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
 
-// `s` is one policy's part of an engine snapshot.
-export function policySummary(s, stepSeconds) {
+// `s` is one policy's part of an engine snapshot. Everything is in
+// simulation steps, like the grid simulator.
+export function policySummary(s) {
   const steps = s.sumQueueSizes.length;
   return {
     avgQueued: mean(s.sumQueueSizes),
     peakQueued: steps ? Math.max(...s.sumQueueSizes) : 0,
-    // Every queued vehicle loses one step of time per step.
-    delayVehHours: s.sumQueueSizes.reduce((a, b) => a + b, 0) * stepSeconds / 3600,
+    // Every queued vehicle waits one step per step: total vehicle-steps waited.
+    totalWaitSteps: s.sumQueueSizes.reduce((a, b) => a + b, 0),
     completed: s.throughput,
-    avgTripMin: (s.avgTripSteps * stepSeconds) / 60,
+    avgTripSteps: s.avgTripSteps,
     inNetwork: s.vehiclesInNetwork.at(-1) ?? 0,
   };
 }
 
 export const METRICS = [
   { key: 'avgQueued', label: 'Avg vehicles waiting', lowerIsBetter: true, format: (v) => v.toFixed(1) },
-  { key: 'delayVehHours', label: 'Total delay', lowerIsBetter: true, format: (v) => `${v.toFixed(1)} veh·h` },
+  { key: 'totalWaitSteps', label: 'Total waiting (vehicle-steps)', lowerIsBetter: true, format: (v) => v.toFixed(0) },
   { key: 'peakQueued', label: 'Peak queue', lowerIsBetter: true, format: (v) => v.toFixed(0) },
-  { key: 'completed', label: 'Trips completed', lowerIsBetter: false, format: (v) => v.toFixed(0) },
-  { key: 'avgTripMin', label: 'Avg trip time', lowerIsBetter: true, format: (v) => `${v.toFixed(1)} min` },
+  { key: 'completed', label: 'Throughput (exited)', lowerIsBetter: false, format: (v) => v.toFixed(0) },
+  { key: 'avgTripSteps', label: 'Avg trip time (steps)', lowerIsBetter: true, format: (v) => v.toFixed(1) },
 ];
 
 // Relative improvement of `ours` over `baseline` (positive = better).

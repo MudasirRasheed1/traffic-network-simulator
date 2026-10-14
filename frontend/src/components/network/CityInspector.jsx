@@ -1,4 +1,4 @@
-import { MODEL_CONSTANTS, ROAD_CLASSES, SOURCES } from '../../network/roadDefaults.js';
+import { ROAD_CLASSES, SOURCES } from '../../network/roadDefaults.js';
 import { PHASES } from '../../simulation/constants.js';
 import { SourceBadge } from './Inspector.jsx';
 import { CITY_COLORS, gatewayColors } from './scenes.js';
@@ -9,8 +9,8 @@ const TURN_LABEL = { L: 'Left (free)', T: 'Through', R: 'Right' };
 const DIR_NAME = { N: 'North', E: 'East', S: 'South', W: 'West' };
 const EDGE_KIND = {
   internal: { label: 'Road', color: CITY_COLORS.road },
-  feeder: { label: 'Feeder road — brings traffic in', color: CITY_COLORS.feeder },
-  exit: { label: 'Exit road — takes traffic out', color: CITY_COLORS.exit },
+  feeder: { label: 'Inflow road', color: CITY_COLORS.feeder },
+  exit: { label: 'Outflow road', color: CITY_COLORS.exit },
 };
 
 function Fact({ label, value }) {
@@ -39,9 +39,10 @@ function NodeChip({ id, lookups, onSelect }) {
   const node = lookups.nodeById(id);
   if (!node) return null;
   const gateway = lookups.gatewayById.has(id);
-  const color = gateway ? gatewayColors(node.role).fill : CITY_COLORS.intersection;
+  const junction = lookups.junctionById.has(id);
+  const color = gateway ? gatewayColors(node.role).fill : junction ? CITY_COLORS.junction : CITY_COLORS.intersection;
   return (
-    <button type="button" className={styles.junctionChip} onClick={() => onSelect({ type: gateway ? 'gateway' : 'intersection', id })}>
+    <button type="button" className={styles.junctionChip} onClick={() => onSelect({ type: gateway ? 'gateway' : junction ? 'junction' : 'intersection', id })}>
       <span style={{ background: color, borderRadius: gateway ? 2 : '50%' }} />
       {id}
     </button>
@@ -89,16 +90,13 @@ function IntersectionInspector({ intersection: i, lookups, onSelect }) {
   const roundabout = i.originalKind === 'roundabout';
   const phaseByName = new Map(i.phases.map((p) => [p.name, p]));
   const arms = ['N', 'E', 'S', 'W'].filter((d) => i.arms[d]);
-  const otherEnd = (edgeId, self) => {
-    const e = lookups.edgeById.get(edgeId);
-    return e.from === self ? e.to : e.from;
-  };
+  const ends = (ids, key) => Array.from(new Set(ids.map((id) => lookups.linkById.get(id)[key])));
 
   return (
     <>
       <div className={styles.inspectorHead}>
         <span className={styles.kindBadge} style={{ '--badge': CITY_COLORS.intersection }}>
-          {roundabout ? 'Roundabout → signalized intersection' : `${i.armCount}-arm signalized intersection`}
+          {roundabout ? 'Roundabout, signalized' : `${i.armCount}-arm signalized intersection`}
         </span>
         <h3>{i.name || 'Unnamed intersection'}</h3>
         <div className={styles.inspectorSub}>
@@ -110,15 +108,14 @@ function IntersectionInspector({ intersection: i, lookups, onSelect }) {
       <section className={styles.inspectorSection}>
         <GridDiagram intersection={i} />
         <p className={styles.paramDetail}>
-          How the simulator sees it: arms in grid slots N/E/S/W
-          {i.frameRotation ? ` (frame turned ${Math.abs(i.frameRotation)}° ${i.frameRotation > 0 ? 'clockwise' : 'anticlockwise'} to fit the real roads)` : ''}.
-          {i.armCount === 3 ? ' One slot is empty — a T-junction, modelled as is.' : ''}
+          Arms in grid slots N/E/S/W
+          {i.frameRotation ? ` (frame turned ${Math.abs(i.frameRotation)}° ${i.frameRotation > 0 ? 'clockwise' : 'anticlockwise'})` : ''}.
           {i.originalArmCount > 4 ? ` The real junction has ${i.originalArmCount} arms; arms from the same direction were joined.` : ''}
         </p>
       </section>
 
       <section className={styles.inspectorSection}>
-        <h4>Arms and where they lead</h4>
+        <h4>Arms</h4>
         <table className={styles.table}>
           <thead><tr><th>Slot</th><th>Road</th><th>Comes from</th><th>Goes to</th></tr></thead>
           <tbody>
@@ -130,10 +127,10 @@ function IntersectionInspector({ intersection: i, lookups, onSelect }) {
                   <td>
                     <div>{a.name || <span className={styles.muted}>Unnamed</span>}</div>
                     {a.highway && <span className={styles.classChip} style={{ '--chip': ROAD_CLASSES[a.highway]?.color }}>{ROAD_CLASSES[a.highway]?.label}</span>}
-                    {a.joinedArms > 1 && <span className={styles.tag}>{a.joinedArms} arms joined</span>}
+                    {a.turnLane && <span className={styles.tag}>turn lane</span>}
                   </td>
-                  <td>{a.inEdgeIds.length ? a.inEdgeIds.map((id) => <NodeChip key={id} id={otherEnd(id, i.id)} lookups={lookups} onSelect={onSelect} />) : <span className={styles.muted}>—</span>}</td>
-                  <td>{a.outEdgeIds.length ? a.outEdgeIds.map((id) => <NodeChip key={id} id={otherEnd(id, i.id)} lookups={lookups} onSelect={onSelect} />) : <span className={styles.muted}>—</span>}</td>
+                  <td>{a.inLinkIds.length ? ends(a.inLinkIds, 'from').map((id) => <NodeChip key={id} id={id} lookups={lookups} onSelect={onSelect} />) : <span className={styles.muted}>-</span>}</td>
+                  <td>{a.outLinkIds.length ? ends(a.outLinkIds, 'to').map((id) => <NodeChip key={id} id={id} lookups={lookups} onSelect={onSelect} />) : <span className={styles.muted}>-</span>}</td>
                 </tr>
               );
             })}
@@ -142,16 +139,16 @@ function IntersectionInspector({ intersection: i, lookups, onSelect }) {
       </section>
 
       <section className={styles.inspectorSection}>
-        <h4>Movements <span className={styles.muted}>(same rules as the grid)</span></h4>
+        <h4>Turns</h4>
         <div className={styles.movementGrid}>
-          {arms.filter((d) => i.arms[d].inEdgeIds.length).map((from) => (
+          {arms.filter((d) => i.arms[d].inLinkIds.length).map((from) => (
             <div key={from} className={styles.movementRow}>
               <span className={styles.movementFrom}>From {from}</span>
               {['L', 'T', 'R'].map((turn) => {
                 const m = i.movements.find((x) => x.from === from && x.turn === turn);
                 if (!m) return <span key={turn} className={styles.moveNone} title="No road in that direction">{turn}</span>;
                 return (
-                  <span key={turn} className={m.allowed ? styles[`move${turn}`] : styles.moveBlocked} title={`${TURN_LABEL[turn]} → ${DIR_NAME[m.to]} arm${m.allowed ? '' : ` — blocked: ${m.reason}`}`}>
+                  <span key={turn} className={m.allowed ? styles[`move${turn}`] : styles.moveBlocked} title={`${TURN_LABEL[turn]} to the ${DIR_NAME[m.to]} arm${m.allowed ? '' : ' (not allowed)'}`}>
                     {turn} → {m.to}
                   </span>
                 );
@@ -162,7 +159,7 @@ function IntersectionInspector({ intersection: i, lookups, onSelect }) {
       </section>
 
       <section className={styles.inspectorSection}>
-        <h4>Signal phases <span className={styles.muted}>({i.phases.length} of 8 grid phases usable)</span></h4>
+        <h4>Signal phases <span className={styles.muted}>({i.phases.length} of 8 usable)</span></h4>
         <div className={styles.phaseGrid}>
           {Object.keys(PHASES).map((name) => {
             const p = phaseByName.get(name);
@@ -185,51 +182,38 @@ function IntersectionInspector({ intersection: i, lookups, onSelect }) {
           label="Signal in OpenStreetMap"
           value={i.osmSignal ? 'Tagged' : 'Not tagged'}
           source={i.osmSignal ? SOURCES.OSM : SOURCES.DEFAULT}
-          detail="Information only — every intersection in this graph is signal-controlled, identically for Fixed and your policy"
+          detail="Information only. Every intersection here is signal-controlled for both policies."
         />
       </section>
     </>
   );
 }
 
-function EdgeCard({ edge, lookups, onSelect }) {
-  const kind = EDGE_KIND[edge.kind];
-  const { saturationFlowPerLaneVph, jamSpacingM } = MODEL_CONSTANTS;
-  const folded = edge.simLinkIds.length - 1;
+function LinkCard({ link, lookups, onSelect }) {
+  const kind = EDGE_KIND[lookups.gatewayById.has(link.from) ? 'feeder' : lookups.gatewayById.has(link.to) ? 'exit' : 'internal'];
   return (
     <div className={styles.directionCard}>
       <div className={styles.directionHead}>
-        <NodeChip id={edge.from} lookups={lookups} onSelect={onSelect} />
-        {edge.fromArm && <span className={styles.muted}>{edge.fromArm} arm</span>}
+        <NodeChip id={link.from} lookups={lookups} onSelect={onSelect} />
+        {link.fromArm && <span className={styles.muted}>{link.fromArm} arm</span>}
         <span className={styles.directionArrow}>→</span>
-        <NodeChip id={edge.to} lookups={lookups} onSelect={onSelect} />
-        {edge.toArm && <span className={styles.muted}>{edge.toArm} arm</span>}
-        <code className={styles.linkId}>{edge.id}</code>
+        <NodeChip id={link.to} lookups={lookups} onSelect={onSelect} />
+        {link.toArm && <span className={styles.muted}>{link.toArm} arm</span>}
+        <code className={styles.linkId}>{link.id}</code>
       </div>
       <span className={styles.kindBadge} style={{ '--badge': kind.color }}>{kind.label}</span>
-      <Param label="Length" value={formatLength(edge.lengthM)} source={SOURCES.DERIVED} detail="Measured along the real road" />
-      <Param label="Lanes" value={edge.lanes.value} source={edge.lanes.source} detail={edge.lanes.detail} />
-      <Param label="Speed limit" value={`${edge.speedKmh.value} km/h`} source={edge.speedKmh.source} detail={edge.speedKmh.detail} />
-      <Param label="Free-flow travel time" value={formatDuration(edge.freeFlowTimeS)} source={SOURCES.DERIVED} detail="Sum over the road pieces: length ÷ speed" />
-      <Param label="Saturation flow" value={`${edge.saturationFlowVph.toLocaleString()} veh/h`} source={SOURCES.DERIVED} detail={`${edge.lanes.value} lane(s) × ${saturationFlowPerLaneVph} veh/h/lane`} />
-      <Param label="Queue storage" value={`${edge.storageVeh} vehicles`} source={SOURCES.DERIVED} detail={`${Math.round(edge.lengthM)} m × ${edge.lanes.value} lane(s) ÷ ${jamSpacingM} m`} />
-      {edge.share < 1 && (
-        <Param
-          label="Share of the arm's traffic"
-          value={`${Math.round(edge.share * 100)}%`}
-          source={SOURCES.DERIVED}
-          detail="The road splits further on; traffic is divided by the number of lanes on each branch"
-        />
-      )}
-      {folded > 0 && <div className={styles.paramDetail}>Passes {folded} merge/split point{folded === 1 ? '' : 's'} (folded into this road).</div>}
+      <Param label="Length" value={formatLength(link.lengthM)} source={SOURCES.DERIVED} detail="Measured along the real road" />
+      <Param label="Lanes" value={link.lanes.value} source={link.lanes.source} detail={link.lanes.detail} />
+      <Param label="Speed limit" value={`${link.speedKmh.value} km/h`} source={link.speedKmh.source} detail={link.speedKmh.detail} />
+      <Param label="Free-flow travel time" value={formatDuration(link.lengthM / (link.speedKmh.value / 3.6))} source={SOURCES.DERIVED} detail="Length ÷ speed" />
     </div>
   );
 }
 
 function RoadInspector({ road, lookups, onSelect }) {
-  const edges = road.edgeIds.map((id) => lookups.edgeById.get(id));
-  const name = edges.find((e) => e.name)?.name;
-  const info = ROAD_CLASSES[edges[0].highway] || ROAD_CLASSES.unclassified;
+  const links = road.linkIds.map((id) => lookups.linkById.get(id));
+  const name = links.find((l) => l.name)?.name;
+  const info = ROAD_CLASSES[links[0].highway] || ROAD_CLASSES.unclassified;
   return (
     <>
       <div className={styles.inspectorHead}>
@@ -241,66 +225,63 @@ function RoadInspector({ road, lookups, onSelect }) {
       </div>
       <section className={styles.inspectorSection}>
         <div className={styles.facts}>
-          <Fact label="Directions" value={edges.length === 2 ? 'Two-way' : 'One-way'} />
-          <Fact label="Length" value={formatLength(edges[0].lengthM)} />
+          <Fact label="Directions" value={links.length > 1 ? 'Two-way' : 'One-way'} />
+          <Fact label="Length" value={formatLength(links[0].lengthM)} />
         </div>
       </section>
       <section className={styles.inspectorSection}>
-        <h4>Directions <span className={styles.muted}>(one simulation edge each)</span></h4>
-        {edges.map((e) => <EdgeCard key={e.id} edge={e} lookups={lookups} onSelect={onSelect} />)}
+        <h4>Directions</h4>
+        {links.map((l) => <LinkCard key={l.id} link={l} lookups={lookups} onSelect={onSelect} />)}
       </section>
     </>
   );
 }
 
+function RoadRows({ title, links, arrowColor, describe, onSelect }) {
+  if (!links.length) return null;
+  return (
+    <section className={styles.inspectorSection}>
+      <h4>{title}</h4>
+      {links.map((l) => (
+        <button key={l.id} type="button" className={styles.roadRow} onClick={() => onSelect({ type: 'road', id: l.roadId })}>
+          <span style={{ color: arrowColor }}>➜</span>
+          <span className={styles.roadRowName}>{describe(l)}</span>
+          <span className={styles.muted}>{formatLength(l.lengthM)} · {l.lanes.value} lane(s)</span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
 function GatewayInspector({ gateway: g, lookups, onSelect }) {
   const c = gatewayColors(g.role);
-  const feeders = g.feederEdgeIds.map((id) => lookups.edgeById.get(id));
-  const exits = g.exitEdgeIds.map((id) => lookups.edgeById.get(id));
   return (
     <>
       <div className={styles.inspectorHead}>
         <span className={styles.kindBadge} style={{ '--badge': c.fill }}>
-          {g.role === 'both' ? 'Source + sink' : g.role === 'source' ? 'Source' : 'Sink'}
+          {g.role === 'both' ? 'Source and sink' : g.role === 'source' ? 'Source' : 'Sink'}
         </span>
         <h3>{g.junctionName || g.roadName || 'Unnamed road'}</h3>
         <div className={styles.inspectorSub}>
-          <code>{g.id}</code> ·{' '}
-          {g.placedAt === 'junction'
-            ? 'the first junction outside your area on this road'
-            : 'no junction found within the download margin — placed at the margin edge'}
+          <code>{g.id}</code> · {g.placedAt === 'junction' ? 'first junction outside your area on this road' : 'placed at the download margin edge'}
         </div>
       </div>
-      <section className={styles.inspectorSection}>
-        <p className={styles.explain}>
-          {g.role !== 'sink' && 'Traffic enters the network here. In the City Simulator you set an inflow function (vehicles over time) on each feeder road below. '}
-          {g.role !== 'source' && 'Traffic leaving the network ends here.'}
-        </p>
-      </section>
-      {feeders.length > 0 && (
-        <section className={styles.inspectorSection}>
-          <h4>Feeder roads (in)</h4>
-          {feeders.map((e) => (
-            <button key={e.id} type="button" className={styles.roadRow} onClick={() => onSelect({ type: 'road', id: e.roadId })}>
-              <span style={{ color: CITY_COLORS.feeder }}>➜</span>
-              <span className={styles.roadRowName}>{e.name || 'Unnamed road'} → {e.to} ({e.toArm} arm)</span>
-              <span className={styles.muted}>{formatLength(e.lengthM)} · {e.lanes.value} lane(s)</span>
-            </button>
-          ))}
-        </section>
-      )}
-      {exits.length > 0 && (
-        <section className={styles.inspectorSection}>
-          <h4>Exit roads (out)</h4>
-          {exits.map((e) => (
-            <button key={e.id} type="button" className={styles.roadRow} onClick={() => onSelect({ type: 'road', id: e.roadId })}>
-              <span style={{ color: CITY_COLORS.exit }}>➜</span>
-              <span className={styles.roadRowName}>{e.from} ({e.fromArm} arm) → {e.name || 'Unnamed road'}</span>
-              <span className={styles.muted}>{formatLength(e.lengthM)} · {e.lanes.value} lane(s)</span>
-            </button>
-          ))}
-        </section>
-      )}
+      <RoadRows title="Roads in" links={g.outLinkIds.map((id) => lookups.linkById.get(id))} arrowColor={CITY_COLORS.feeder} describe={(l) => `${l.name || 'Unnamed road'} → ${l.to}`} onSelect={onSelect} />
+      <RoadRows title="Roads out" links={g.inLinkIds.map((id) => lookups.linkById.get(id))} arrowColor={CITY_COLORS.exit} describe={(l) => `${l.from} → ${l.name || 'Unnamed road'}`} onSelect={onSelect} />
+    </>
+  );
+}
+
+function JunctionInspector({ junction: j, lookups, onSelect }) {
+  return (
+    <>
+      <div className={styles.inspectorHead}>
+        <span className={styles.kindBadge} style={{ '--badge': CITY_COLORS.junction }}>Junction, no signal</span>
+        <h3>{j.name || 'Unnamed junction'}</h3>
+        <div className={styles.inspectorSub}><code>{j.id}</code> · roads join or split here without waiting</div>
+      </div>
+      <RoadRows title="Roads in" links={j.inLinkIds.map((id) => lookups.linkById.get(id))} arrowColor={CITY_COLORS.road} describe={(l) => `${l.from} → ${l.name || 'Unnamed road'}`} onSelect={onSelect} />
+      <RoadRows title="Roads out" links={j.outLinkIds.map((id) => lookups.linkById.get(id))} arrowColor={CITY_COLORS.road} describe={(l) => `${l.name || 'Unnamed road'} → ${l.to}`} onSelect={onSelect} />
     </>
   );
 }
@@ -309,12 +290,15 @@ export function buildCityLookups(city) {
   if (!city) return null;
   const intersectionById = new Map(city.intersections.map((i) => [i.id, i]));
   const gatewayById = new Map(city.gateways.map((g) => [g.id, g]));
+  const junctionById = new Map(city.junctions.map((j) => [j.id, j]));
   return {
     intersectionById,
     gatewayById,
+    junctionById,
+    linkById: new Map(city.links.map((l) => [l.id, l])),
     edgeById: new Map(city.edges.map((e) => [e.id, e])),
     roadById: new Map(city.roads.map((r) => [r.id, r])),
-    nodeById: (id) => intersectionById.get(id) || gatewayById.get(id),
+    nodeById: (id) => intersectionById.get(id) || gatewayById.get(id) || junctionById.get(id),
   };
 }
 
@@ -330,6 +314,9 @@ export default function CityInspector({ selection, lookups, onSelect }) {
   } else if (selection.type === 'gateway') {
     const g = lookups.gatewayById.get(selection.id);
     if (g) body = <GatewayInspector gateway={g} lookups={lookups} onSelect={onSelect} />;
+  } else if (selection.type === 'junction') {
+    const j = lookups.junctionById.get(selection.id);
+    if (j) body = <JunctionInspector junction={j} lookups={lookups} onSelect={onSelect} />;
   }
   if (!body) return null;
   return (

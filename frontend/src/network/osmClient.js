@@ -18,15 +18,41 @@ export const DOWNLOAD_MARGIN_M = 700;
 
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
-// Public Overpass instances, tried in order when one is busy.
+// Public Overpass instances. They are free, shared and often busy, so a
+// request is not left waiting on one of them: see raceEndpoints below.
 export const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 const RETRY_ROUNDS = 2;
 const RETRY_PAUSE_MS = 4000;
+// A server that has not answered after this long gets company: the next
+// one is asked as well and the first good answer wins.
+export const HEDGE_DELAY_MS = 8000;
+const LAST_GOOD_KEY = 'urbangrid-overpass-last-good';
+
+// The server that answered last time goes first.
+export function orderedEndpoints() {
+  let last = null;
+  try {
+    last = localStorage.getItem(LAST_GOOD_KEY);
+  } catch {
+    // storage is best-effort
+  }
+  if (!last || !OVERPASS_ENDPOINTS.includes(last)) return [...OVERPASS_ENDPOINTS];
+  return [last, ...OVERPASS_ENDPOINTS.filter((e) => e !== last)];
+}
+
+function rememberEndpoint(endpoint) {
+  try {
+    localStorage.setItem(LAST_GOOD_KEY, endpoint);
+  } catch {
+    // storage is best-effort
+  }
+}
 
 const OVERPASS_TIMEOUT_S = 90;
 const cache = new Map();
@@ -142,14 +168,85 @@ async function postQuery(endpoint, query, signal) {
       const reason = text.match(/<strong[^>]*>Error<\/strong>:([^<]*)/)?.[1]?.trim();
       throw new Error(reason ? `server busy (${reason.slice(0, 80)})` : 'non-JSON response');
     }
-    return JSON.parse(text);
+    const data = JSON.parse(text);
+    // A query that ran out of time or memory still answers 200, with a remark.
+    if (!Array.isArray(data.elements) || /error|timed out/i.test(data.remark || '')) {
+      throw new Error(data.remark ? `server gave up (${String(data.remark).slice(0, 80)})` : 'incomplete response');
+    }
+    return data;
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
   }
 }
 
-// onProgress receives { endpoint, attempt, total, status, error? }
+// Ask the servers in order, without waiting in line: when one fails the
+// next starts at once, and when one is merely slow the next is started
+// alongside it after HEDGE_DELAY_MS. The first good answer wins and the
+// rest are cancelled. Rejects with { errors } when every server failed.
+function raceEndpoints(endpoints, query, { signal, onProgress, attemptOffset = 0, total = endpoints.length } = {}) {
+  return new Promise((resolve, reject) => {
+    const controllers = [];
+    const errors = [];
+    let next = 0;
+    let pending = 0;
+    let settled = false;
+    let timer = null;
+    const finish = (settle, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      controllers.forEach((c) => c.abort());
+      settle(value);
+    };
+    const onAbort = () => finish(reject, new Error('Cancelled'));
+    const armTimer = () => {
+      clearTimeout(timer);
+      if (next >= endpoints.length) return;
+      timer = setTimeout(() => {
+        start(true);
+        armTimer();
+      }, HEDGE_DELAY_MS);
+    };
+    const start = (hedged) => {
+      if (settled || next >= endpoints.length) return;
+      const endpoint = endpoints[next];
+      next += 1;
+      const controller = new AbortController();
+      controllers.push(controller);
+      pending += 1;
+      const attempt = attemptOffset + next;
+      onProgress?.({ endpoint, attempt, total, status: 'requesting', hedged });
+      const started = performance.now();
+      postQuery(endpoint, query, controller.signal).then(
+        (data) => finish(resolve, { data, endpoint, durationMs: Math.round(performance.now() - started) }),
+        (err) => {
+          pending -= 1;
+          if (settled) return;
+          const message = err.name === 'AbortError' ? 'timed out' : err.message;
+          errors.push(`${new URL(endpoint).host}: ${message}`);
+          onProgress?.({ endpoint, attempt, total, status: 'failed', error: message });
+          if (next < endpoints.length) {
+            start(false);
+            armTimer();
+          } else if (pending === 0) {
+            finish(reject, Object.assign(new Error('All servers failed'), { errors }));
+          }
+        },
+      );
+    };
+    if (signal?.aborted) {
+      reject(new Error('Cancelled'));
+      return;
+    }
+    signal?.addEventListener('abort', onAbort);
+    start(false);
+    armTimer();
+  });
+}
+
+// onProgress receives { endpoint, attempt, total, status, error?, hedged? }
 // Returns { data, meta } where meta.downloadBox is the area plus margin.
 export async function fetchRoadNetwork(area, { detailLevel = 'all', onProgress, signal } = {}) {
   const downloadBox = expandBox(area, DOWNLOAD_MARGIN_M);
@@ -164,20 +261,18 @@ export async function fetchRoadNetwork(area, { detailLevel = 'all', onProgress, 
     onProgress?.({ status: 'cached', storedAt: stored.meta.fetchedAt });
     return { ...stored, meta: { ...stored.meta, durationMs: 0, fromCache: true } };
   }
-  const errors = [];
-  const attempts = [];
-  for (let round = 0; round < RETRY_ROUNDS; round++) for (const endpoint of OVERPASS_ENDPOINTS) attempts.push({ endpoint, round });
-  for (let i = 0; i < attempts.length; i++) {
-    const { endpoint, round } = attempts[i];
-    if (round > 0 && attempts[i - 1].round !== round) {
+  const endpoints = orderedEndpoints();
+  const total = endpoints.length * RETRY_ROUNDS;
+  let errors = [];
+  for (let round = 0; round < RETRY_ROUNDS; round++) {
+    if (round > 0) {
       onProgress?.({ status: 'pause', round: round + 1 });
       await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
     }
     if (signal?.aborted) throw new Error('Cancelled');
-    onProgress?.({ endpoint, attempt: i + 1, total: attempts.length, status: 'requesting' });
-    const started = performance.now();
     try {
-      const data = await postQuery(endpoint, query, signal);
+      const { data, endpoint, durationMs } = await raceEndpoints(endpoints, query, { signal, onProgress, attemptOffset: round * endpoints.length, total });
+      rememberEndpoint(endpoint);
       const result = {
         data,
         meta: {
@@ -186,7 +281,7 @@ export async function fetchRoadNetwork(area, { detailLevel = 'all', onProgress, 
           area,
           downloadBox,
           fetchedAt: new Date().toISOString(),
-          durationMs: Math.round(performance.now() - started),
+          durationMs,
           osmTimestamp: data.osm3s?.timestamp_osm_base || null,
           elementCount: data.elements?.length || 0,
         },
@@ -195,11 +290,9 @@ export async function fetchRoadNetwork(area, { detailLevel = 'all', onProgress, 
       writePersistent(query, result);
       return result;
     } catch (err) {
-      if (signal?.aborted) throw new Error('Cancelled');
-      const message = err.name === 'AbortError' ? 'timed out' : err.message;
-      errors.push(`${new URL(endpoint).host}: ${message}`);
-      onProgress?.({ endpoint, attempt: i + 1, total: attempts.length, status: 'failed', error: message });
+      if (signal?.aborted || !err.errors) throw err;
+      errors = err.errors;
     }
   }
-  throw new Error(`The free OpenStreetMap servers are busy (${errors.slice(-OVERPASS_ENDPOINTS.length).join('; ')}). Try again in a few minutes, pick a smaller area, or import a saved OSM file.`);
+  throw new Error(`The free OpenStreetMap servers are busy (${errors.join('; ')}). Try again in a few minutes, pick a smaller area, or import a saved OSM file.`);
 }

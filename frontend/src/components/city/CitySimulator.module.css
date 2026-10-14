@@ -214,7 +214,7 @@
   flex-direction: column;
 }
 
-.drawerOpen { height: 46%; min-height: 260px; }
+.drawerOpen { height: 55%; min-height: 300px; }
 
 .drawerHead {
   display: flex;
@@ -352,3 +352,163 @@
   align-items: center;
   margin: 6px 0 8px;
 }
+
+.seedSection { margin-top: 16px; }
+
+.fieldGrid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0 8px;
+}
+
+.ratioSum { margin-top: 6px; font-size: 0.75rem; font-weight: 700; }
+
+.formula {
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: #94a3b8;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.formula b { color: #38bdf8; }
+
+/* Grid-style override fields in the click panels */
+.ovTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ovBlock { margin-bottom: 10px; }
+.ovGrid2, .ovGrid3, .ovGrid4 { display: grid; gap: 8px; margin: 6px 0; }
+.ovGrid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ovGrid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ovGrid4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ovField {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ovField > span {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ovField input,
+.ovField select {
+  width: 100%;
+  min-width: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 5px 7px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.ovField input::placeholder { color: var(--text-muted); opacity: 0.8; }
+.ovEdited input,
+.ovEdited select { border-color: #f59e0b; }
+.ovOff { opacity: 0.35; }
+.ovComputed {
+  padding: 5px 7px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-light);
+  border-radius: 6px;
+}
+.ovArmRow {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: end;
+  gap: 6px;
+}
+.ovArm {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #7dd3fc;
+  padding-bottom: 12px;
+}
+
+/* Editing the graph */
+.nameInput {
+  width: 100%;
+  margin: 6px 0 2px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: 700;
+  padding: 3px 6px;
+  margin-left: -6px;
+}
+.nameInput:hover { border-color: var(--border-light); }
+.nameInput:focus { border-color: #38bdf8; outline: none; background: var(--bg-primary); }
+.actionRow { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.actionRow button { margin-top: 0; padding: 5px 10px; font-size: 0.78rem; }
+.dangerBtn { color: #fca5a5; border-color: #7f1d1d; }
+.dangerBtn:hover:not(:disabled) { border-color: #ef4444; }
+.dangerLink { color: #fca5a5; }
+.turnToggleRow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 5px 0; }
+.turnOn, .turnOff, .turnNone {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  cursor: pointer;
+}
+.turnOn { color: #0b0f19; background: #34d399; border-color: #34d399; }
+.turnOff { color: var(--text-muted); text-decoration: line-through; }
+.turnNone { color: var(--text-muted); opacity: 0.35; cursor: default; }
+.continueFrom { font-size: 0.74rem; font-weight: 700; color: #7dd3fc; min-width: 64px; }
+.armRow { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 6px; align-items: center; margin: 4px 0; }
+.armRow select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 5px 4px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+.armRow button { margin: 0; }
+.toolGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.toolGrid button { margin-top: 0; padding: 6px 8px; font-size: 0.78rem; }
+.toolActive { border-color: #38bdf8 !important; color: #38bdf8; }
+.toolHint {
+  margin-top: 8px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid #0e7490;
+  background: rgba(14, 116, 144, 0.18);
+  color: #a5f3fc;
+  font-size: 0.76rem;
+}
+.issueList { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.issueList li button {
+  width: 100%;
+  text-align: left;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 6px;
+  color: #fcd34d;
+  font-size: 0.74rem;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.issueList li button:disabled { cursor: default; }
+.pickedCard { border-color: #38bdf8 !important; box-shadow: 0 0 0 1px #38bdf8 inset; }

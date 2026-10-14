@@ -133,7 +133,7 @@ function JunctionInspector({ junction: j, lookups, onSelect }) {
               value={j.osmNodes.length}
               source={SOURCES.DERIVED}
               detail={j.osmNodes.length > 1
-                ? 'Several OSM points form this one physical junction (divided roads / roundabout) — shown as yellow dots'
+                ? 'Several OSM points form this junction (shown as yellow dots)'
                 : 'Single OSM junction node'}
             />
           </section>
@@ -154,8 +154,8 @@ function JunctionInspector({ junction: j, lookups, onSelect }) {
                         <div>{arm.name || <span className={styles.muted}>Unnamed</span>}</div>
                         <ClassChip highway={arm.highway} />{arm.divided && <span className={styles.tag}>divided</span>}
                       </td>
-                      <td>{arm.inLanes || '—'}</td>
-                      <td>{arm.outLanes || '—'}</td>
+                      <td>{arm.inLanes || '-'}</td>
+                      <td>{arm.outLanes || '-'}</td>
                     </tr>
                   );
                 })}
@@ -186,7 +186,7 @@ function JunctionInspector({ junction: j, lookups, onSelect }) {
                             <td
                               key={ti}
                               className={m.allowed ? styles[`turn${m.turn}`] : styles.cellBlocked}
-                              title={`${TURN_LABELS[m.turn]} (${m.angle > 0 ? '+' : ''}${m.angle}°)${m.allowed ? '' : ` — blocked: ${m.reason}`}`}
+                              title={`${TURN_LABELS[m.turn]} (${m.angle > 0 ? '+' : ''}${m.angle}°)${m.allowed ? '' : ` (blocked: ${m.reason})`}`}
                             >
                               {m.turn}
                             </td>
@@ -198,7 +198,7 @@ function JunctionInspector({ junction: j, lookups, onSelect }) {
                 </table>
               </div>
               <div className={styles.paramDetail}>
-                L / T / R / U = left, through, right, U-turn — from the angle between arms. Struck cells are blocked (U-turns by default, or an OSM turn restriction). Hover a cell for details.
+                L / T / R / U: left, through, right, U-turn. Struck cells are blocked.
               </div>
             </section>
           )}
@@ -281,7 +281,7 @@ function DirectionCard({ link, lookups, onSelect }) {
         label="Saturation flow"
         value={`${link.saturationFlowVph.toLocaleString()} veh/h`}
         source={SOURCES.DERIVED}
-        detail={`${link.lanes.value} lane(s) × ${saturationFlowPerLaneVph} veh/h/lane — max discharge rate on green`}
+        detail={`${link.lanes.value} lane(s) × ${saturationFlowPerLaneVph} veh/h/lane`}
       />
       <Param
         label="Queue storage"
@@ -310,13 +310,13 @@ function RoadInspector({ road, lookups, onSelect }) {
         <div className={styles.facts}>
           <Fact label="Length" value={formatLength(road.lengthM)} />
           <Fact label="Direction" value={road.oneway ? 'One-way' : 'Two-way'} />
-          <Fact label="Surface" value={road.surface || '—'} />
+          <Fact label="Surface" value={road.surface || '-'} />
           <Fact label="Structure" value={road.bridge ? 'Bridge' : road.tunnel ? 'Tunnel' : 'At grade'} />
         </div>
         <Param label="Road width" value={`${road.width.value} m`} source={road.width.source} detail={road.width.detail} />
         <Param label="Length" value={`${road.lengthM.toFixed(1)} m`} source={SOURCES.DERIVED} detail="Measured along the OSM geometry (great-circle distance between points)" />
         {road.midblockSignals.length > 0 && (
-          <div className={styles.paramDetail}>{road.midblockSignals.length} mid-block signal(s) (likely pedestrian crossing) — not treated as a junction.</div>
+          <div className={styles.paramDetail}>{road.midblockSignals.length} mid-block signal(s), not treated as a junction.</div>
         )}
       </section>
 
@@ -334,14 +334,14 @@ function RoadInspector({ road, lookups, onSelect }) {
               <tr key={`${s.wayId}-${i}`}>
                 <td><a href={osmLink('way', s.wayId)} target="_blank" rel="noreferrer">{s.wayId}</a></td>
                 <td>{Math.round(s.lengthM)} m</td>
-                <td>{s.tags.lanes ?? <span className={styles.muted}>—</span>}</td>
-                <td>{s.tags.maxspeed ?? <span className={styles.muted}>—</span>}</td>
-                <td>{s.tags.oneway ?? <span className={styles.muted}>—</span>}</td>
+                <td>{s.tags.lanes ?? <span className={styles.muted}>-</span>}</td>
+                <td>{s.tags.maxspeed ?? <span className={styles.muted}>-</span>}</td>
+                <td>{s.tags.oneway ?? <span className={styles.muted}>-</span>}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className={styles.paramDetail}>“—” = tag missing in OSM, so a default is used above.</div>
+        <div className={styles.paramDetail}>"-": tag missing in OSM, default used.</div>
       </section>
     </>
   );

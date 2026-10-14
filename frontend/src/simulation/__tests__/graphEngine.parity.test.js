@@ -46,6 +46,18 @@ function expectIdentical({ grid, graph }) {
       expect(g.vehiclesExited, `${pol} ${id} exited`).toBe(m.vehiclesExited);
     }
   }
+  // The last greedy decision at every intersection, number for number.
+  const pick = (d) => ({
+    time: d.time,
+    bestPhase: d.bestPhase,
+    bestScore: d.bestScore,
+    queuesBefore: d.queuesBefore,
+    horizon: d.horizonInputs.map((h) => h.boundaryArrivalRates),
+    candidates: d.candidateResults.map((c) => ({ phase: c.phase, score: c.totalScore, after: c.queuesAfter, trace: c.stepTrace })),
+  });
+  for (const [id, d] of Object.entries(grid.greedyDecisionData)) {
+    expect(pick(graph.greedyDecisionData[id]), `decision ${id}`).toEqual(pick(d));
+  }
 }
 
 describe('graph engine reproduces the grid engine exactly', () => {

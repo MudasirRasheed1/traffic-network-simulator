@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { SimulationEngine } from '../simulation/engine.js';
+import { gridEngineConfig } from '../simulation/gridEngineConfig.js';
 import { makeConstantInflowProfile } from '../simulation/arrivalProfile.js';
 
 const DEFAULT_CONFIG = {
@@ -46,50 +47,7 @@ function deepClone(value) {
 }
 
 function buildEngineFromStoreState(state) {
-  const { config, boundaryInflowOverrides, departureRateOverrides, roadOverrides, boundaryRoadOverrides } = state;
-  const gridSize = config.gridSize;
-
-  // Build boundary inflow profile array with intersection override priority.
-  const boundaryInflowProfiles = [];
-  for (let r = 0; r < gridSize; r++) {
-    boundaryInflowProfiles.push([]);
-    for (let c = 0; c < gridSize; c++) {
-      const key = `${r},${c}`;
-      const overrides = boundaryInflowOverrides[key] || {};
-      const isBoundary = r === 0 || r === gridSize - 1 || c === 0 || c === gridSize - 1;
-      const profileByDir = { N: makeConstantInflowProfile(0), S: makeConstantInflowProfile(0), E: makeConstantInflowProfile(0), W: makeConstantInflowProfile(0) };
-
-      if (isBoundary) {
-        if (r === 0) profileByDir.N = overrides.N || config.defaultBoundaryInflowProfiles.N;
-        if (r === gridSize - 1) profileByDir.S = overrides.S || config.defaultBoundaryInflowProfiles.S;
-        if (c === 0) profileByDir.W = overrides.W || config.defaultBoundaryInflowProfiles.W;
-        if (c === gridSize - 1) profileByDir.E = overrides.E || config.defaultBoundaryInflowProfiles.E;
-      }
-
-      boundaryInflowProfiles[r].push(profileByDir);
-    }
-  }
-
-  // Build departure rates array (per direction per intersection).
-  const departureRates = [];
-  for (let r = 0; r < gridSize; r++) {
-    departureRates.push([]);
-    for (let c = 0; c < gridSize; c++) {
-      const key = `${r},${c}`;
-      const base = config.baseDepartureRate;
-      departureRates[r].push(
-        departureRateOverrides[key] ?? { N: base, S: base, E: base, W: base }
-      );
-    }
-  }
-
-  const engine = new SimulationEngine({
-    ...config,
-    boundaryInflowProfiles,
-    departureRates,
-    roadOverrides: Object.keys(roadOverrides).length > 0 ? roadOverrides : null,
-    boundaryRoadOverrides: Object.keys(boundaryRoadOverrides).length > 0 ? boundaryRoadOverrides : null,
-  });
+  const engine = new SimulationEngine(gridEngineConfig(state));
   engine.init();
   return engine;
 }
@@ -121,6 +79,8 @@ export const useSimStore = create((set, get) => ({
   // Simulation state
   engine: null,
   snapshot: null,
+  // Why the last run could not start (for example, a data file too short).
+  runError: null,
   isRunning: false,
   isPaused: false,
   speed: 5,
@@ -129,6 +89,7 @@ export const useSimStore = create((set, get) => ({
 
   // ===== Config Actions =====
   updateConfig: (partial) => set((state) => ({
+    runError: null,
     config: { ...state.config, ...partial },
   })),
 
@@ -136,6 +97,7 @@ export const useSimStore = create((set, get) => ({
     const key = `${row},${col}`;
     const existing = state.boundaryInflowOverrides[key] || {};
     return {
+      runError: null,
       boundaryInflowOverrides: {
         ...state.boundaryInflowOverrides,
         [key]: { ...existing, [dir]: value },
@@ -328,21 +290,27 @@ export const useSimStore = create((set, get) => ({
 
   // ===== Simulation Actions =====
   initSimulation: () => {
-    const engine = buildEngineFromStoreState(get());
+    let engine;
+    try {
+      engine = buildEngineFromStoreState(get());
+    } catch (err) {
+      set({ engine: null, runError: err.message, isRunning: false, isPaused: false });
+      return false;
+    }
 
     set({
       engine,
       snapshot: engine.getSnapshot(),
+      runError: null,
       isRunning: false,
       isPaused: false,
     });
+    return true;
   },
 
   startSimulation: () => {
     const state = get();
-    if (!state.engine) {
-      get().initSimulation();
-    }
+    if (!state.engine && !get().initSimulation()) return;
 
     const existingInterval = get().intervalId;
     if (existingInterval) clearTimeout(existingInterval);
@@ -405,6 +373,7 @@ export const useSimStore = create((set, get) => ({
     set({
       engine: null,
       snapshot: null,
+      runError: null,
       isRunning: false,
       isPaused: false,
       intervalId: null,
@@ -415,7 +384,7 @@ export const useSimStore = create((set, get) => ({
   stepOnce: () => {
     const { engine } = get();
     if (!engine) {
-      get().initSimulation();
+      if (!get().initSimulation()) return;
       const snapshot = get().engine.step();
       set({ snapshot });
       return;

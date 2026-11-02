@@ -5,7 +5,7 @@ import { buildSimulationNetwork } from '../../network/buildSimulationNetwork.js'
 import { buildCityGraph } from '../../network/buildCityGraph.js';
 import { bboxAround } from '../../network/geo.js';
 import { GraphSimulationEngine } from '../graphEngine.js';
-import { DEFAULT_CITY_SIM_CONFIG, engineConfig, makeRateProfile, sourceLinks } from '../cityNetwork.js';
+import { DEFAULT_CITY_SIM_CONFIG, engineConfig, makeRateProfile, sourceGateways } from '../cityNetwork.js';
 
 const download = { south: 28.622776, west: 77.209134, north: 28.640763, east: 77.229627 };
 const data = JSON.parse(readFileSync(new URL('../../network/__tests__/fixtures/delhi-connaught-place.json', import.meta.url)));
@@ -38,14 +38,14 @@ describe('city simulation (Connaught Place)', () => {
   });
 
   it('steady veh/h inflow averages out exactly', () => {
-    const source = sourceLinks(city)[0];
+    const source = sourceGateways(city)[0];
     const e = run(DEFAULT_CITY_SIM_CONFIG, {}, { [source.id]: makeRateProfile(900) });
     const series = e.arrivalRateSeriesByKey[source.id];
     expect(series.reduce((a, b) => a + b, 0)).toBe(900);
   });
 
   it('zero inflow means an empty network', () => {
-    const inflows = Object.fromEntries(sourceLinks(city).map((l) => [l.id, makeRateProfile(0)]));
+    const inflows = Object.fromEntries(sourceGateways(city).map((g) => [g.id, makeRateProfile(0)]));
     const e = run(DEFAULT_CITY_SIM_CONFIG, {}, inflows);
     expect(e.globalMetrics.fixed.totalVehiclesEntered).toBe(0);
     expect(Math.max(...e.globalMetrics.greedy.vehiclesInNetwork)).toBe(0);

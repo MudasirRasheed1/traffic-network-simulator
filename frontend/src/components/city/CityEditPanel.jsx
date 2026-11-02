@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useCityStore } from '../../store/useCityStore.js';
 import CityReasoningModal from './CityReasoningModal.jsx';
-import { armDepartureRate, defaultTurnProbs, effectiveLink, inflowFor, sourceLinks } from '../../simulation/cityNetwork.js';
+import { armDepartureRate, cityDataTimeline, defaultTurnProbs, effectiveLink, inflowFor, sourceGateways } from '../../simulation/cityNetwork.js';
 import { makeConstantInflowProfile, makeDefaultDistributionConfig } from '../../simulation/arrivalProfile.js';
 import { ROAD_CLASSES } from '../../network/roadDefaults.js';
 import { haversineM, pointAlong, polylineLengthM } from '../../network/geo.js';
@@ -9,6 +9,7 @@ import {
   ARM_DIRS, addReverseLink, continuationsOf, deleteLink, deleteNode, mergeNodes, setContinuation, setNodeKind, setTurnAllowed, splitRoadAt, updateLink, updateNode,
 } from '../../network/cityModel.js';
 import { InflowFunctionEditor, InflowDistributionEditor, cloneProfile } from '../ConfigPanel.jsx';
+import { isDataProfile, matchColumn } from '../../simulation/dataInflow.js';
 import { GridDiagram } from '../network/CityInspector.jsx';
 import { CITY_COLORS, gatewayColors } from '../network/scenes.js';
 import { formatLength } from '../network/networkStyle.js';
@@ -146,9 +147,9 @@ const turnsAvailable = (intersection, arm) => Object.fromEntries(['L', 'T', 'R']
   Boolean(intersection.movements.find((m) => m.from === arm && m.turn === turn)?.allowed),
 ]));
 
-// Inflow of one source road: Default, Constant, Function or Distribution, as in the grid.
-function InflowFields({ link, label }) {
-  const { inflows, config, setInflow, city } = useCityStore();
+// Inflow of one source: Default, Constant, Function or Distribution, as in the grid.
+function InflowFields({ gateway: link, label }) {
+  const { inflows, config, setInflow, setConfig, city } = useCityStore();
   const custom = inflows[link.id];
   const base = () => cloneProfile(inflowFor(link, city, config, {}));
   const profile = custom ? cloneProfile(custom) : base();
@@ -187,7 +188,21 @@ function InflowFields({ link, label }) {
         )}
         {mode === 'default' && <ComputedField label="Rate (cars/step)" value={profile.mode === 'constant' ? profile.constantValue : profile.mode} />}
       </div>
-      {mode === 'function' && <InflowFunctionEditor profile={profile} onChange={(p) => setInflow(link.id, p)} />}
+      {mode === 'function' && (
+        <InflowFunctionEditor
+          profile={profile}
+          onChange={(p) => setInflow(link.id, p)}
+          sourceNames={[link.id, link.junctionName, link.roadName].filter(Boolean)}
+          runSteps={config.simDuration}
+          timeline={cityDataTimeline(city, config, inflows)}
+          onTimelineChange={(p) => setConfig({
+            ...(p.stepSeconds != null ? { stepSeconds: p.stepSeconds } : {}),
+            ...('start' in p ? { dataStart: p.start } : {}),
+            ...(p.spread ? { dataSpread: p.spread } : {}),
+          })}
+          stepNote="The same step length sets how long cars take to drive each road."
+        />
+      )}
       {mode === 'distribution' && <InflowDistributionEditor profile={profile} onChange={(p) => setInflow(link.id, p)} />}
     </div>
   );
@@ -497,11 +512,19 @@ function GatewayPanel({ gateway: g, snapshot, onSelect, tools }) {
   const { city, inflows, setAllInflows, config, editModel } = useCityStore();
   const linkById = new Map(city.links.map((l) => [l.id, l]));
   const c = gatewayColors(g.role);
-  const entering = sourceLinks(city).filter((l) => l.from === g.id);
+  const isSource = sourceGateways(city).some((x) => x.id === g.id);
   const leaving = g.inLinkIds.map((id) => linkById.get(id));
   const applyToAll = () => {
-    const profile = inflows[entering[0].id] || inflowFor(entering[0], city, config, {});
-    setAllInflows(Object.fromEntries(sourceLinks(city).map((l) => [l.id, cloneProfile(profile)])));
+    const profile = inflows[g.id] || inflowFor(g, city, config, {});
+    // A data file with a column named after a source gives that source its column.
+    const forSource = (x) => {
+      const copy = cloneProfile(profile);
+      if (!isDataProfile(copy)) return copy;
+      const data = copy.functionConfig.data;
+      const own = matchColumn(Object.keys(data.counts), [x.id, x.junctionName, x.roadName]);
+      return { ...copy, functionConfig: { ...copy.functionConfig, data: { ...data, column: own || data.column } } };
+    };
+    setAllInflows(Object.fromEntries(sourceGateways(city).map((x) => [x.id, forSource(x)])));
   };
   const badge = { both: 'Source and sink', source: 'Source', sink: 'Sink', unused: 'Not connected' }[g.role];
   return (
@@ -511,10 +534,10 @@ function GatewayPanel({ gateway: g, snapshot, onSelect, tools }) {
         <NameField value={g.junctionName} placeholder={g.roadName || 'Unnamed source/sink'} onCommit={(name) => editModel((m) => updateNode(m, g.id, { name }))} />
         <div className={nx.inspectorSub}><code>{g.id}</code></div>
       </div>
-      {entering.length > 0 && (
+      {isSource && (
         <section className={nx.inspectorSection}>
           <SectionTitle>Inflow</SectionTitle>
-          {entering.map((l) => <InflowFields key={l.id} link={l} label={`Towards ${l.to}`} />)}
+          <InflowFields gateway={g} label="Cars entering here" />
           <button type="button" className={nx.linkBtn} onClick={applyToAll}>Apply to all sources</button>
         </section>
       )}

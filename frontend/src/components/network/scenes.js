@@ -7,7 +7,6 @@
 // =====================================================
 
 import { pointAlong } from '../../network/geo.js';
-import { MODEL_CONSTANTS } from '../../network/roadDefaults.js';
 import {
   JUNCTION_KINDS,
   junctionColor,
@@ -131,26 +130,22 @@ export function gatewayColors(role) {
   return { fill: CITY_COLORS.feeder, border: CITY_COLORS.exit };
 }
 
-// Live colouring while a simulation runs.
-export const QUEUE_STOPS = [
-  { max: 5, color: '#22c55e', label: '≤ 5 queued' },
-  { max: 15, color: '#eab308', label: '6 to 15' },
-  { max: 30, color: '#f97316', label: '16 to 30' },
-  { max: Infinity, color: '#ef4444', label: '> 30' },
+// Live colouring while a simulation runs: intersections only, by the cars
+// waiting at them (all arms together). Roads keep their usual colours.
+export const CONGESTION = [
+  { key: 'free', label: 'Free flowing', color: '#22c55e', intersection: '5 or fewer waiting', queueMax: 5 },
+  { key: 'busy', label: 'Busy', color: '#eab308', intersection: '6 to 15 waiting', queueMax: 15 },
+  { key: 'heavy', label: 'Heavy', color: '#f97316', intersection: '16 to 30 waiting', queueMax: 30 },
+  { key: 'jammed', label: 'Jammed', color: '#ef4444', intersection: 'more than 30 waiting', queueMax: Infinity },
 ];
-export const LOAD_STOPS = [
-  { max: 0.25, color: '#64748b', label: '< 25% full' },
-  { max: 0.5, color: '#eab308', label: '25 to 50%' },
-  { max: 0.8, color: '#f97316', label: '50 to 80%' },
-  { max: Infinity, color: '#ef4444', label: '> 80%' },
-];
-const stopColor = (stops, v) => stops.find((st) => v <= st.max).color;
+const queueCongestion = (n) => CONGESTION.find((c) => n <= c.queueMax);
 
 /**
  * Draws the physical graph: one line per road (both directions together),
  * intersections, junctions without signal, sources and sinks.
  *
  * live (optional): { queues: {intersectionId: n}, phases: {id: name},
+ *                    armQueues: {intersectionId: {N, E, S, W}},
  *                    linkCars: {linkId: n} }
  * marked (optional): Set of node/road ids to flag as changed by the user.
  * pending (optional): id of a node picked as the start of a new road.
@@ -168,15 +163,22 @@ export function buildCityScene(city, { shape = 'straight', showLabels = true, li
   const roadLinks = (r) => r.linkIds.map((id) => linkById.get(id));
   const roadLanes = (r) => roadLinks(r).reduce((s, l) => s + l.lanes.value, 0);
   const weightOf = (r) => Math.min(9, 2 + roadLanes(r) * 0.9);
-  const storageOf = (l) => Math.max(1, Math.floor((l.lengthM * l.lanes.value) / MODEL_CONSTANTS.jamSpacingM));
-  const roadLoad = (r) => {
-    const cars = r.linkIds.reduce((s, id) => s + (live.linkCars[id] || 0), 0);
-    const storage = roadLinks(r).reduce((s, l) => s + storageOf(l), 0);
-    return { cars, load: cars / storage };
+  // Cars waiting at the end of a road: its arm's queue, shared by lanes
+  // among the roads that arrive on that arm.
+  const armLanes = new Map();
+  for (const l of city.links) {
+    if (!l.toArm) continue;
+    const key = `${l.to}:${l.toArm}`;
+    armLanes.set(key, (armLanes.get(key) || 0) + l.lanes.value);
+  }
+  const waitingOn = (l) => {
+    if (!l.toArm || !live?.armQueues?.[l.to]) return 0;
+    const q = live.armQueues[l.to][l.toArm] || 0;
+    return q * (l.lanes.value / (armLanes.get(`${l.to}:${l.toArm}`) || l.lanes.value));
   };
+  const linkTraffic = (l) => ({ driving: live.linkCars[l.id] || 0, waiting: waitingOn(l) });
   const linkRole = (l) => (gatewayIds.has(l.from) ? 'feeder' : gatewayIds.has(l.to) ? 'exit' : 'internal');
   const roadColor = (r) => {
-    if (live && r.kind === 'internal') return stopColor(LOAD_STOPS, roadLoad(r).load);
     if (r.kind === 'internal') return lightMap ? CITY_COLORS.roadOnLight : CITY_COLORS.road;
     return roadLinks(r).some((l) => linkRole(l) === 'feeder') ? CITY_COLORS.feeder : CITY_COLORS.exit;
   };
@@ -192,10 +194,8 @@ export function buildCityScene(city, { shape = 'straight', showLabels = true, li
     const w = lineWeight(l);
     return w / 2 + DIRECTION_GAP_PX + sameWay.indexOf(l) * (w + DIRECTION_GAP_PX);
   };
-  const linkLoad = (l) => (live.linkCars[l.id] || 0) / storageOf(l);
   const linkColor = (l) => {
     const r = roadById.get(l.roadId);
-    if (live && r.kind === 'internal') return stopColor(LOAD_STOPS, linkLoad(l));
     if (r.kind === 'internal') return roadColor(r);
     // At a source/sink each direction shows its own role: in or out.
     return linkRole(l) === 'exit' ? CITY_COLORS.exit : CITY_COLORS.feeder;
@@ -204,9 +204,14 @@ export function buildCityScene(city, { shape = 'straight', showLabels = true, li
   const roadTip = (r) => {
     const links = roadLinks(r);
     const name = links.find((l) => l.name)?.name;
-    return `<strong>${escapeHtml(name || 'Unnamed road')}</strong><br/>${r.a} ↔ ${r.b} · ${roadLabel(r)} · ${links.length > 1 ? 'two-way' : 'one-way'} · ${roadLanes(r)} lane(s)${live ? ` · ${roadLoad(r).cars} car(s) driving` : ''}${marked?.has(r.id) ? ' · <em>edited</em>' : ''}`;
+    return `<strong>${escapeHtml(name || 'Unnamed road')}</strong><br/>${r.a} ↔ ${r.b} · ${roadLabel(r)} · ${links.length > 1 ? 'two-way' : 'one-way'} · ${roadLanes(r)} lane(s)${marked?.has(r.id) ? ' · <em>edited</em>' : ''}`;
   };
-  const linkTip = (l) => `<strong>${escapeHtml(l.name || 'Unnamed road')}</strong><br/>${l.from} → ${l.to} · ${l.lanes.value} lane(s)${live ? ` · ${live.linkCars[l.id] || 0} car(s) driving` : ''}`;
+  const linkTip = (l) => {
+    const head = `<strong>${escapeHtml(l.name || 'Unnamed road')}</strong><br/>${l.from} → ${l.to} · ${l.lanes.value} lane(s)`;
+    if (!live) return head;
+    const t = linkTraffic(l);
+    return `${head}<br/>${t.driving} driving, ${Math.round(t.waiting)} waiting at the light`;
+  };
   // One path per direction, straight between the nodes or along the real
   // road. A two-way road shows two paths side by side; each can be clicked.
   const lines = city.links.map((l) => ({
@@ -254,8 +259,8 @@ export function buildCityScene(city, { shape = 'straight', showLabels = true, li
       radius: (z) => (6 + (i.armCount === 4 ? 1.5 : 0) + (live ? Math.min(5, (live.queues[i.id] || 0) / 8) : 0)) * zoomScale(z),
       stroke: strokeOf(i.id, i.originalKind === 'roundabout' ? CITY_COLORS.roundaboutRing : '#0b0f19'),
       strokeWeight: pending === i.id || marked?.has(i.id) || i.originalKind === 'roundabout' ? 3 : 2,
-      fill: live ? stopColor(QUEUE_STOPS, live.queues[i.id] || 0) : CITY_COLORS.intersection,
-      tooltip: `<strong>${escapeHtml(i.name || i.id)}</strong><br/>${i.id} · ${i.armCount}-arm signalized${i.originalKind === 'roundabout' ? ' · roundabout' : ''}${live ? `<br/>${live.queues[i.id] || 0} queued · phase ${live.phases[i.id] || '-'}` : ''}`,
+      fill: live ? queueCongestion(live.queues[i.id] || 0).color : CITY_COLORS.intersection,
+      tooltip: `<strong>${escapeHtml(i.name || i.id)}</strong><br/>${i.id} · ${i.armCount}-arm signalized${i.originalKind === 'roundabout' ? ' · roundabout' : ''}${live ? `<br/>${queueCongestion(live.queues[i.id] || 0).label}: ${live.queues[i.id] || 0} waiting · phase ${live.phases[i.id] || '-'}` : ''}`,
       select: { type: 'intersection', id: i.id },
     })),
   ];

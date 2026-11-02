@@ -10,6 +10,7 @@ import { FIXED_CYCLE, PHASE_NAMES } from './constants.js';
 import { MODEL_CONSTANTS } from '../network/roadDefaults.js';
 import { bearingDeg } from '../network/geo.js';
 import { makeConstantInflowProfile } from './arrivalProfile.js';
+import { alignDataEntries, dataTimeline } from './dataInflow.js';
 
 export const SIDES = ['N', 'S', 'E', 'W'];
 
@@ -146,31 +147,32 @@ export function sourceSide(city, gatewayId) {
   return ['N', 'E', 'S', 'W'][Math.round(b / 90) % 4];
 }
 
-// Roads on which traffic enters: the ones leaving a source that reach an intersection.
-export function sourceLinks(city) {
-  const starts = new Set(city.edges.filter((e) => e.kind === 'feeder').map((e) => e.linkIds[0]));
-  return city.links.filter((l) => starts.has(l.id));
+// Sources: the squares from which traffic reaches an intersection.
+export function sourceGateways(city) {
+  return city.gateways.filter((g) => g.feederEdgeIds.length);
 }
 
-// Inflow used for a source road: its own, else the default for its side.
-export function inflowFor(link, city, config, inflows = {}) {
-  if (inflows?.[link.id]) return inflows[link.id];
-  return config.defaultBoundaryInflowProfiles?.[sourceSide(city, link.from)] || makeConstantInflowProfile(0);
+// Inflow of a source: its own, else the default for its side of the area.
+export function inflowFor(gateway, city, config, inflows = {}) {
+  if (inflows?.[gateway.id]) return inflows[gateway.id];
+  return config.defaultBoundaryInflowProfiles?.[sourceSide(city, gateway.id)] || makeConstantInflowProfile(0);
 }
 
 // Vehicles per step an arm can release on green: set by hand, else the
-// lanes of the roads that physically arrive on it.
+// lanes of the roads that arrive on it, at most the lanes the arm really
+// has (the simple graph can bring several direct roads onto one arm).
 export function armDepartureRate(intersection, dir, city, config, overrides = {}) {
   const manual = overrides.departure?.[intersection.id]?.[dir];
   if (manual != null) return manual;
   const linkById = linkIndex(city);
   const perLane = config.departurePerLane ?? DEFAULT_CITY_SIM_CONFIG.departurePerLane;
-  return intersection.arms[dir].inLinkIds.reduce((sum, id) => sum + effectiveLink(linkById.get(id), overrides.links, config).lanes * perLane, 0);
+  const lanes = intersection.arms[dir].inLinkIds.reduce((sum, id) => sum + effectiveLink(linkById.get(id), overrides.links, config).lanes, 0);
+  const physical = intersection.armLanes?.[dir];
+  return (physical ? Math.min(lanes, physical) : lanes) * perLane;
 }
 
-export function entryLabel(city, link) {
-  const g = city.gateways.find((x) => x.id === link.from);
-  return `${link.from} · ${link.name || g?.junctionName || g?.roadName || 'source'}`;
+export function entryLabel(gateway) {
+  return `${gateway.id} · ${gateway.junctionName || gateway.roadName || 'source'}`;
 }
 
 /**
@@ -179,7 +181,7 @@ export function entryLabel(city, link) {
  * @param overrides  { links: { [linkId]: { lanes, speedPerStep, lengthM } },
  *                     turns: { [intersectionId]: { [arm]: { T, R, L } } },
  *                     departure: { [intersectionId]: { [arm]: vehPerStep } } }
- * @param inflows    { [sourceLinkId]: profile }
+ * @param inflows    { [sourceGatewayId]: profile }
  */
 export function buildEngineNetwork(city, config, overrides = {}, inflows = {}) {
   const indexed = { ...city, linkById: new Map(city.links.map((l) => [l.id, l])) };
@@ -227,25 +229,38 @@ export function buildEngineNetwork(city, config, overrides = {}, inflows = {}) {
     };
   });
 
-  // One inflow per source road. Where that road later splits, each car
-  // takes one of its routes in proportion to their shares.
-  const entries = sourceLinks(city).map((link) => {
-    const routes = city.edges.filter((e) => e.kind === 'feeder' && e.linkIds[0] === link.id);
+  // One inflow per source. Where its roads lead to several intersections,
+  // each car takes one of them in proportion to their shares.
+  const edgeById = new Map(city.edges.map((e) => [e.id, e]));
+  const entries = sourceGateways(city).map((g) => {
+    const routes = g.feederEdgeIds.map((id) => edgeById.get(id));
     return {
-      key: link.id,
+      key: g.id,
       edgeId: routes[0].id,
       edges: routes.length > 1 ? routes.map((r) => ({ edgeId: r.id, share: r.share })) : null,
-      label: entryLabel(city, link),
-      profile: inflowFor(link, city, config, inflows),
+      label: entryLabel(g),
+      profile: inflowFor(g, city, config, inflows),
     };
   });
 
   return { intersections, edges, entries };
 }
 
+// Data-file sources on one clock: step 0 at the earliest data (or the
+// start set by the user), each step as long as the simulator's step.
+export function cityDataTimeline(city, config, inflows) {
+  return dataTimeline(
+    sourceGateways(city).map((g) => ({ label: g.id, profile: inflowFor(g, city, config, inflows) })),
+    { stepSeconds: config.stepSeconds, start: config.dataStart, spread: config.dataSpread },
+  );
+}
+
 export function engineConfig(city, config, overrides, inflows) {
+  const network = buildEngineNetwork(city, config, overrides, inflows);
+  const { entries, timeline } = alignDataEntries(network.entries, { stepSeconds: config.stepSeconds, start: config.dataStart, spread: config.dataSpread });
   return {
-    network: buildEngineNetwork(city, config, overrides, inflows),
+    network: { ...network, entries },
+    dataError: timeline.error,
     simDuration: Math.max(1, Math.round(config.simDuration)),
     stepSeconds: config.stepSeconds,
     seed: config.seed,

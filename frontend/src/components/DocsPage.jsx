@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../utils/api.js';
 import Logo from './Logo.jsx';
+import TrafficDataDocs from './docs/TrafficDataDocs.jsx';
 import styles from './DocsPage.module.css';
 
 const DIRECTION_CONFIG = {
@@ -260,6 +261,11 @@ function generateWaveformData(type, amp = 8, period = 20, baseline = 4, totalSte
 
 export default function DocsPage() {
   const navigate = useNavigate();
+  // Links such as /docs#traffic-data open at that section.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (id) setTimeout(() => document.getElementById(id)?.scrollIntoView(), 50);
+  }, []);
   const [activeTab, setActiveTab] = useState('sine');
   const [amp, setAmp] = useState(8);
   const [period, setPeriod] = useState(20);
@@ -367,6 +373,7 @@ export default function DocsPage() {
           <a href="#section-inflow-sandbox" className={styles.navPill}>5. Inflow Math Sandbox</a>
           <a href="#section-greedy" className={styles.navPill}>6. Greedy Optimization</a>
           <a href="#section-benchmarks" className={styles.navPill}>7. Evaluation KPIs</a>
+          <a href="#traffic-data" className={styles.navPill}>8. Your Traffic Data</a>
         </div>
       </header>
 
@@ -799,6 +806,9 @@ export default function DocsPage() {
           </div>
         </div>
       </section>
+
+      {/* SECTION 8: Feeding sources from a data file */}
+      <TrafficDataDocs docStyles={styles} />
     </div>
   );
 }

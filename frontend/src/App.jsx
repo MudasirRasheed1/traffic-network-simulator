@@ -10,6 +10,8 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import StatsDashboard from './components/StatsDashboard.jsx';
 import SaveSimulationModal from './components/SaveSimulationModal.jsx';
 import Logo from './components/Logo.jsx';
+import GridExperimentSection from './components/experiments/GridExperimentSection.jsx';
+import { FEATURES } from './features.js';
 import styles from './App.module.css';
 
 export default function App() {
@@ -32,6 +34,7 @@ export default function App() {
   const initSimulation = useSimStore((s) => s.initSimulation);
   const stepOnce = useSimStore((s) => s.stepOnce);
   const stepBackOnce = useSimStore((s) => s.stepBackOnce);
+  const runError = useSimStore((s) => s.runError);
 
   const simActive = isRunning || isPaused;
 
@@ -50,7 +53,7 @@ export default function App() {
 
   const handleStart = () => {
     setIsCurrentRunSaved(false);
-    initSimulation();
+    if (!initSimulation()) return;
     startSimulation();
   };
 
@@ -215,6 +218,11 @@ export default function App() {
               </button>
             )
           )}
+          {FEATURES.batchRuns && (
+            <a href="#extract-details" className={`${styles.btn} ${styles.btnStep}`} style={{ textDecoration: 'none' }} title="Run many simulations and download a report">
+              Extract Details
+            </a>
+          )}
         </div>
 
         <div className={styles.speedControl}>
@@ -229,6 +237,8 @@ export default function App() {
           <span>{speed} steps/s</span>
         </div>
       </div>
+
+      {runError && <div className={styles.runError} role="alert">{runError}</div>}
 
       <div className={styles.visualGrid}>
         <div>
@@ -256,6 +266,8 @@ export default function App() {
       </div>
 
       <StatsDashboard />
+
+      {FEATURES.batchRuns && <GridExperimentSection />}
 
       {showSaveModal && (
         <SaveSimulationModal 

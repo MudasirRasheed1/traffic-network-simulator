@@ -148,7 +148,7 @@ export function deriveCity(base) {
     const total = options.reduce((s, o) => s + o.weight, 0);
     for (const o of options) walk([...path, o.link], (share * o.weight) / total, new Set(visited).add(last.to));
   };
-  for (const l of links) if (kindOf(l.from) !== 'junction') walk([l], 1, new Set());
+  for (const l of links) if (kindOf(l.from) !== 'junction') walk([l], l.share ?? 1, new Set());
   const throughRoutes = found.filter((r) => kindOf(r.path[0].from) === 'gateway' && kindOf(r.path[r.path.length - 1].to) === 'gateway').length;
   const edges = found
     .filter((r) => kindOf(r.path[0].from) === 'intersection' || kindOf(r.path[r.path.length - 1].to) === 'intersection')
@@ -201,7 +201,7 @@ export function deriveCity(base) {
         // Routes arriving on / leaving by this arm (what the engine queues and releases).
         inEdgeIds: edges.filter((e) => e.to === n.id && e.toArm === dir).map((e) => e.id),
         outEdgeIds: edges.filter((e) => e.from === n.id && e.fromArm === dir).map((e) => e.id),
-        inLanes: inLinks.reduce((s, l) => s + l.lanes.value, 0),
+        inLanes: Math.min(inLinks.reduce((s, l) => s + l.lanes.value, 0), n.armLanes?.[dir] || Infinity),
         outLanes: outLinks.reduce((s, l) => s + l.lanes.value, 0),
         turnLane: all.every((l) => l.turnLane),
       };
@@ -239,6 +239,7 @@ export function deriveCity(base) {
       movements,
       phases,
       sourceJunctionId: n.sourceJunctionId ?? null,
+      armLanes: n.armLanes || null,
       custom: Boolean(n.custom),
     };
   });
@@ -332,6 +333,188 @@ export function deriveCity(base) {
     log: base.extraction?.log || [],
     warnings: base.extraction?.warnings || [],
   };
+}
+
+// =====================================================
+// SIMPLE GRAPH
+//
+// The high-level picture: only intersections and sources/sinks, and
+// between any two of them at most one road per direction. Every way
+// through the junctions becomes a direct road; ways that end at the same
+// node are joined into one (the busiest one's shape and arms, the widest
+// lanes). How traffic divided where roads forked is kept as each road's
+// share, so the simulation sends the same fractions each way.
+// =====================================================
+export function simplifyModel(model) {
+  const detailed = deriveCity({ model });
+  const groups = new Map();
+  for (const route of detailed.edges) {
+    // Same start, same end, same arms: strands of one road. Roads that
+    // leave or arrive by different arms are different roads and stay.
+    const key = `${route.from}:${route.fromArm || ''}>${route.to}:${route.toArm || ''}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(route);
+  }
+  const pieceById = new Map(detailed.links.map((l) => [l.id, l]));
+  const kindOf = (id) => model.nodes.find((nd) => nd.id === id)?.kind;
+  // Lanes where the road meets its intersection: they decide how many
+  // cars it can release on green there.
+  const endLanes = (r) => {
+    const piece = pieceById.get(kindOf(r.to) === 'intersection' ? r.linkIds[r.linkIds.length - 1] : r.linkIds[0]);
+    return piece?.lanes.value ?? r.lanes.value;
+  };
+  let n = 0;
+  const links = Array.from(groups.values()).map((routes) => {
+    const main = routes.slice().sort((a, b) => b.share - a.share || endLanes(b) - endLanes(a))[0];
+    const lanes = Math.max(...routes.map(endLanes));
+    n += 1;
+    return {
+      id: `L${n}`,
+      from: main.from,
+      to: main.to,
+      fromArm: main.fromArm,
+      toArm: main.toArm,
+      lengthM: main.lengthM,
+      name: main.name,
+      highway: main.highway,
+      connector: main.connector,
+      lanes: { ...main.lanes, value: lanes, detail: routes.length > 1 ? `widest of ${routes.length} parallel ways, where they meet the intersection` : 'where the road meets the intersection' },
+      speedKmh: main.speedKmh,
+      coords: main.coords,
+      next: null,
+      simLinkIds: main.simLinkIds,
+      share: Math.round(Math.min(1, routes.reduce((s, r) => s + r.share, 0)) * 1000) / 1000,
+      turnLane: false,
+    };
+  });
+  const used = new Set(links.flatMap((l) => [l.from, l.to]));
+  // Several direct roads may now arrive on one arm where one physical
+  // road did; the arm keeps the lanes it really has, so its green-light
+  // capacity is not counted several times.
+  const armLanesOf = new Map(detailed.intersections.map((i) => [i.id, Object.fromEntries(Object.values(i.arms).map((a) => [a.dir, a.inLanes]))]));
+  const nodes = model.nodes
+    .filter((nd) => nd.kind !== 'junction' && (nd.kind === 'intersection' || used.has(nd.id)))
+    .map((nd) => (nd.kind === 'intersection' ? { ...nd, armLanes: armLanesOf.get(nd.id) || {} } : nd));
+  return { nodes, links, simple: true };
+}
+
+// =====================================================
+// ROUGH GRAPH
+//
+// The skeleton of the city. Only the main road classes stay (local
+// streets and slip roads go); a point where just one road passes through
+// is no longer an intersection. Then intersections closer than `mergeM`
+// (the two halves of a divided road) become one, and so do sources/sinks
+// next to each other, and between any two nodes one road per direction
+// is left. The numbers differ from the detailed graph.
+// =====================================================
+const ROUGH_MIN_RANKS = [7, 6]; // secondary and up; tertiary if too little is left
+
+// Roads that lead nowhere once the minor streets are gone.
+function pruneDeadEnds(model) {
+  let links = model.links;
+  const junctions = new Set(model.nodes.filter((nd) => nd.kind === 'junction').map((nd) => nd.id));
+  for (;;) {
+    const ins = new Map();
+    const outs = new Map();
+    for (const l of links) {
+      ins.set(l.to, (ins.get(l.to) || 0) + 1);
+      outs.set(l.from, (outs.get(l.from) || 0) + 1);
+    }
+    const dead = (id) => junctions.has(id) && (!ins.get(id) || !outs.get(id));
+    const kept = links.filter((l) => !dead(l.from) && !dead(l.to));
+    if (kept.length === links.length) return cleanContinuations({ ...model, links });
+    links = kept;
+  }
+}
+
+function mainRoadsOnly(model, minRank) {
+  const main = (l) => l.custom || !l.highway || (!l.highway.endsWith('_link') && roadClassInfo(l.highway).rank >= minRank);
+  const kept = pruneDeadEnds({ ...model, links: model.links.filter(main) });
+  // Two directions or fewer: a bend in one road, not an intersection.
+  const arms = new Map(deriveCity({ model: kept }).intersections.map((i) => [i.id, Object.keys(i.arms).length]));
+  const nodes = kept.nodes.map((nd) => (nd.kind === 'intersection' && !nd.custom && (arms.get(nd.id) || 0) <= 2 ? { ...nd, kind: 'junction' } : nd));
+  return pruneDeadEnds({ ...kept, nodes });
+}
+
+export function roughModel(model, { mergeM = 150 } = {}) {
+  let base = model;
+  for (const minRank of ROUGH_MIN_RANKS) {
+    const candidate = mainRoadsOnly(model, minRank);
+    if (candidate.nodes.filter((nd) => nd.kind === 'intersection').length >= 2) {
+      base = candidate;
+      break;
+    }
+  }
+  let next = simplifyModel(base);
+  const degree = (id) => next.links.filter((l) => l.from === id || l.to === id).length;
+  const merged = new Set();
+
+  for (const kind of ['intersection', 'gateway']) {
+    const nodes = next.nodes.filter((nd) => nd.kind === kind);
+    const dist = (a, b) => haversineM(a.lat, a.lon, b.lat, b.lon);
+    const pairs = [];
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const d = dist(nodes[i], nodes[j]);
+        if (d <= mergeM) pairs.push({ a: nodes[i], b: nodes[j], d });
+      }
+    }
+    pairs.sort((x, y) => x.d - y.d);
+    // Closest pairs first; a group never spreads wider than 1.5 × mergeM.
+    const groupOf = new Map(nodes.map((nd) => [nd.id, [nd]]));
+    for (const { a, b } of pairs) {
+      const ga = groupOf.get(a.id);
+      const gb = groupOf.get(b.id);
+      if (ga === gb) continue;
+      if (ga.some((x) => gb.some((y) => dist(x, y) > mergeM * 1.5))) continue;
+      const joined = [...ga, ...gb];
+      for (const nd of joined) groupOf.set(nd.id, joined);
+    }
+    for (const group of new Set(groupOf.values())) {
+      if (group.length < 2) continue;
+      const keep = group.slice().sort((x, y) => degree(y.id) - degree(x.id) || x.id.localeCompare(y.id))[0];
+      for (const nd of group) if (nd.id !== keep.id) next = mergeNodes(next, keep.id, nd.id);
+      const lat = group.reduce((s, nd) => s + nd.lat, 0) / group.length;
+      const lon = group.reduce((s, nd) => s + nd.lon, 0) / group.length;
+      next = moveNode(next, keep.id, lat, lon);
+      if (kind === 'intersection') {
+        next = updateNode(next, keep.id, { blockedTurns: [], mergedFrom: group.map((nd) => nd.id) });
+        next = fitArms(next, keep.id);
+        merged.add(keep.id);
+      }
+    }
+  }
+
+  // One road per direction between two nodes: the busiest one, with the
+  // widest lanes and the traffic of all of them.
+  const groups = new Map();
+  for (const l of next.links) {
+    const key = `${l.from}>${l.to}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(l);
+  }
+  const links = Array.from(groups.values()).map((ls) => {
+    if (ls.length === 1) return ls[0];
+    const main = ls.slice().sort((a, b) => (b.share ?? 1) - (a.share ?? 1) || b.lanes.value - a.lanes.value)[0];
+    return {
+      ...main,
+      lanes: { ...main.lanes, value: Math.max(...ls.map((l) => l.lanes.value)) },
+      share: Math.round(Math.min(1, ls.reduce((s, l) => s + (l.share ?? 1), 0)) * 1000) / 1000,
+    };
+  });
+
+  // Merged intersections: each arm keeps the lanes of its widest road in.
+  const nodes = next.nodes.map((nd) => {
+    if (!merged.has(nd.id)) return nd;
+    const armLanes = {};
+    for (const l of links) {
+      if (l.to !== nd.id || !l.toArm) continue;
+      armLanes[l.toArm] = Math.max(armLanes[l.toArm] || 0, l.lanes.value);
+    }
+    return { ...nd, armLanes };
+  });
+  return { nodes, links, simple: true, rough: true };
 }
 
 // =====================================================

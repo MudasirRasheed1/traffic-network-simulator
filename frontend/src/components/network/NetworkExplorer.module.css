@@ -422,6 +422,19 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   position: relative;
   min-width: 0;
   min-height: 0;
+  padding: 12px;
+  background: var(--bg-primary);
+}
+
+/* The map sits in a card */
+.mapCard {
+  position: relative;
+  height: 100%;
+  border: 1px solid var(--border-light);
+  border-top: 3px solid #38bdf8;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 
 .map {
@@ -1198,3 +1211,79 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .arrowIconClickable { cursor: pointer; }
 .arrowIconClickable span { transition: box-shadow 0.12s ease; }
 .arrowIconClickable:hover span { box-shadow: 0 0 0 2px #38bdf8; }
+
+/* Step number in a collapsible panel header */
+.stepBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #0e7490;
+  color: #ecfeff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+/* Shown over a map whose wheel scrolls the page */
+.wheelHint {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 15, 25, 0.45);
+  color: #f8fafc;
+  font-size: 0.95rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* Map overlay boxes that can be hidden */
+.overlayBtn {
+  position: absolute;
+  z-index: 800;
+  border: 1px solid var(--border-light);
+  background: rgba(15, 23, 42, 0.92);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.overlayBtn:hover { color: #fff; border-color: #38bdf8; }
+.overlayBtnTop { top: 60px; left: 56px; }
+.overlayBtnBottom { bottom: 24px; left: 12px; }
+.overlayClose {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.overlayClose:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.legendHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -4px -6px 6px 0;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.ruleList {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}

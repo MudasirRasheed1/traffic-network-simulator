@@ -14,6 +14,24 @@ import { DETAIL_LEVELS, MODEL_CONSTANTS, ROAD_CLASSES } from '../../network/road
 import { DEFAULT_GRAPH_OPTIONS } from '../../network/buildRoadGraph.js';
 import { MAP_STYLES, useMapStyle } from './useMapStyle.js';
 import { createBackgroundWorker } from '../../utils/backgroundWorker.js';
+import { deriveCity, roughModel, simplifyModel } from '../../network/cityModel.js';
+import { CollapsiblePanel, CollapsibleSidebar, usePanels } from '../common/Collapsible.jsx';
+
+const DETAIL_KEY = 'urbangrid-graph-detail-v2';
+const GRAPH_DETAIL = { rough: 'Rough', simple: 'Simple', detailed: 'Detailed' };
+const DETAIL_HINTS = {
+  rough: 'Main structure only. Nearby intersections and sources are joined.',
+  simple: 'One road per direction. Same results as Detailed.',
+  detailed: 'Every road piece from the map.',
+};
+const savedDetail = () => {
+  try {
+    const saved = localStorage.getItem(DETAIL_KEY);
+    return GRAPH_DETAIL[saved] ? saved : 'rough';
+  } catch {
+    return 'rough';
+  }
+};
 import styles from './NetworkExplorer.module.css';
 
 const DEFAULT_CENTER = [30.7398, 76.7827];
@@ -60,9 +78,18 @@ function CoverageBar({ label, pct }) {
 }
 
 function StepLog({ steps }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? steps : steps.slice(-1);
   return (
     <ol className={styles.stepLog}>
-      {steps.map((s, i) => (
+      {steps.length > 1 && (
+        <li>
+          <button type="button" className={styles.linkBtn} style={{ margin: 0 }} onClick={() => setAll(!all)}>
+            {all ? 'Hide steps' : `Show all ${steps.length} steps`}
+          </button>
+        </li>
+      )}
+      {shown.map((s, i) => (
         <li key={i} className={styles[`step_${s.state}`]}>
           <span className={styles.stepDot} />
           <span>{s.text}</span>
@@ -107,7 +134,24 @@ export default function NetworkExplorerPage() {
   const [osm, setOsm] = useState(null);
   const [graph, setGraph] = useState(null);
   const [simnet, setSimnet] = useState(null);
-  const [city, setCity] = useState(null);
+  const [detailedCity, setCity] = useState(null);
+  // Rough: the skeleton, nearby intersections joined. Simple: only
+  // intersections and sources/sinks, one road per direction between them.
+  // Detailed: every junction and road piece.
+  const [graphDetail, setGraphDetailState] = useState(savedDetail);
+  const setGraphDetail = (value) => {
+    setGraphDetailState(value);
+    setSelection(null);
+    try { localStorage.setItem(DETAIL_KEY, value); } catch { /* per-browser preference only */ }
+  };
+  const city = useMemo(
+    () => {
+      if (!detailedCity || graphDetail === 'detailed') return detailedCity;
+      const model = graphDetail === 'rough' ? roughModel(detailedCity.model) : simplifyModel(detailedCity.model);
+      return deriveCity({ ...detailedCity, model });
+    },
+    [detailedCity, graphDetail],
+  );
 
   const [view, setView] = useState('city');
   const [selection, setSelection] = useState(null);
@@ -116,10 +160,11 @@ export default function NetworkExplorerPage() {
   const [showLabels, setShowLabels] = useState(true);
   const [mapMode, setMapMode] = useState('dim');
   const [mapStyle, setMapStyle] = useMapStyle();
-  const [showAssumptions, setShowAssumptions] = useState(false);
   const abortRef = useRef(null);
   const loadCity = useCityStore((st) => st.loadCity);
   const fileInputRef = useRef(null);
+  const overlays = usePanels('urbangrid-explorer-overlays', { mapOptions: true, legend: false });
+  const panels = usePanels('urbangrid-explorer-panels', { find: true, area: true, extract: true, cityGraph: true, funnel: false, fullGraph: true, assumptions: false });
 
   useEffect(() => {
     if (!api.isAuthenticated()) navigate('/');
@@ -324,11 +369,9 @@ export default function NetworkExplorerPage() {
         </nav>
       </header>
 
-      <div className={styles.body}>
-        <aside className={styles.sidebar}>
-          <section className={styles.panel}>
-            <div className={styles.panelStep}>1</div>
-            <h2>Find a place</h2>
+      <div className={styles.body} style={panels.isOpen('sidebar') ? undefined : { gridTemplateColumns: '40px 1fr' }}>
+        <CollapsibleSidebar panels={panels} className={styles.sidebar} label="Panels">
+          <CollapsiblePanel id="find" title={<><span className={styles.stepBadge}>1</span>Find a place</>} panels={panels} className={styles.panel}>
             <form className={styles.searchRow} onSubmit={onSearch}>
               <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="City, area or landmark…" aria-label="Search place" />
               <button type="submit" disabled={searching || !query.trim()}>{searching ? '…' : 'Search'}</button>
@@ -346,15 +389,13 @@ export default function NetworkExplorerPage() {
                 ))}
               </ul>
             )}
-          </section>
+          </CollapsiblePanel>
 
-          <section className={styles.panel}>
-            <div className={styles.panelStep}>2</div>
-            <h2>Select the area</h2>
+          <CollapsiblePanel id="area" title={<><span className={styles.stepBadge}>2</span>Select the area</>} panels={panels} className={styles.panel}>
             {drawMode ? (
               <div className={styles.drawBox}>
                 <strong>Drawing: {draftPoints.length} corner{draftPoints.length === 1 ? '' : 's'}</strong>
-                <span>Click on the map to add corners. To close the shape, click the first (green) corner, press Enter, or “Finish shape”. Backspace removes the last corner, Esc cancels.</span>
+                <span>Click the map to add corners. Enter finishes, Esc cancels.</span>
                 <div className={styles.extractRow}>
                   <button type="button" className={styles.primaryBtn} onClick={finishDrawing} disabled={draftPoints.length < 3}>Finish shape</button>
                   <button type="button" className={styles.secondaryBtn} style={{ marginTop: 0 }} onClick={() => setDraftPoints((pts) => pts.slice(0, -1))} disabled={!draftPoints.length}>Undo</button>
@@ -392,19 +433,17 @@ export default function NetworkExplorerPage() {
             />
             <p className={styles.hint}>
               {mode === 'select'
-                ? 'Drag any corner or the ✥ handle to adjust, or “Draw shape” to click out your own. The shape is approximate: roads leaving it are followed out to the previous junction (up to the dotted margin).'
-                : 'Showing the extracted city graph. Click any intersection, road or source/sink to inspect it.'}
+                ? 'Drag the corners to adjust.'
+                : 'Click any item to inspect it.'}
             </p>
             {mode === 'explore' && (
               <button type="button" className={styles.secondaryBtn} onClick={() => { setMode('select'); setSelection(null); }}>
                 Change area
               </button>
             )}
-          </section>
+          </CollapsiblePanel>
 
-          <section className={styles.panel}>
-            <div className={styles.panelStep}>3</div>
-            <h2>Extract</h2>
+          <CollapsiblePanel id="extract" title={<><span className={styles.stepBadge}>3</span>Extract</>} panels={panels} className={styles.panel}>
             <div className={styles.extractRow}>
               <button type="button" className={styles.primaryBtn} onClick={onExtract} disabled={busy || mode !== 'select' || !areaValid || drawMode}>
                 {busy ? 'Working…' : `Extract city graph`}
@@ -419,41 +458,22 @@ export default function NetworkExplorerPage() {
               Import a saved OSM file instead…
             </button>
             <input ref={fileInputRef} type="file" accept=".json,application/json" hidden onChange={onImportFile} aria-label="Import OSM file" />
-          </section>
+          </CollapsiblePanel>
 
           {c && view === 'city' && (
             <>
-              <section className={styles.panel}>
-                <h2>City graph</h2>
+              <CollapsiblePanel id="cityGraph" title={'City graph'} panels={panels} className={styles.panel}>
+                <Segmented options={GRAPH_DETAIL} value={graphDetail} onChange={setGraphDetail} />
+                <p className={styles.hint}>{DETAIL_HINTS[graphDetail]}</p>
                 <div className={styles.statGrid}>
                   <StatTile label="Intersections" value={c.intersections} color={CITY_COLORS.intersection} />
-                  <StatTile label="4-arm" value={c.armsHistogram[4] || 0} />
-                  <StatTile label="3-arm" value={c.armsHistogram[3] || 0} />
                   <StatTile label="Sources" value={c.sources} color={CITY_COLORS.feeder} />
                   <StatTile label="Sinks" value={c.sinks} color={CITY_COLORS.exit} />
                   <StatTile label="Roundabouts" value={c.fromRoundabouts} color={CITY_COLORS.roundaboutRing} />
                   <StatTile label="Roads" value={c.roads} />
-                  <StatTile label="Junctions" value={c.junctions} color={CITY_COLORS.junction} />
                   <StatTile label="Road length" value={`${c.roadKm} km`} />
                 </div>
                 {city.warnings.map((w) => <div key={w} className={styles.warnText}>{w}</div>)}
-              </section>
-
-              <section className={styles.panel}>
-                <h2>From map to city graph</h2>
-                <ol className={styles.funnel}>
-                  <li>
-                    <span>Full map</span><strong>{s.junctions} junctions</strong>
-                    <span>{s.roads} road segments, {s.totalRoadKm} km (area + margin)</span>
-                  </li>
-                  {[...simnet.log, ...city.log].map((entry) => (
-                    <li key={entry.step}><span>{entry.step}</span><strong /><span>{entry.detail}</span></li>
-                  ))}
-                  <li className={styles.funnelFinal}>
-                    <span>City graph</span><strong>{c.intersections} intersections</strong>
-                    <span>{c.roads} roads · {c.junctions} junctions without signal · {c.sources} sources · {c.sinks} sinks</span>
-                  </li>
-                </ol>
                 <div className={styles.downloadRow}>
                   <button
                     type="button"
@@ -470,13 +490,28 @@ export default function NetworkExplorerPage() {
                     Download city graph
                   </button>
                 </div>
-              </section>
+              </CollapsiblePanel>
+
+              <CollapsiblePanel id="funnel" title={'From map to city graph'} panels={panels} className={styles.panel}>
+                <ol className={styles.funnel}>
+                  <li>
+                    <span>Full map</span><strong>{s.junctions} junctions</strong>
+                    <span>{s.roads} road segments, {s.totalRoadKm} km (area + margin)</span>
+                  </li>
+                  {[...simnet.log, ...city.log].map((entry) => (
+                    <li key={entry.step}><span>{entry.step}</span><strong /><span>{entry.detail}</span></li>
+                  ))}
+                  <li className={styles.funnelFinal}>
+                    <span>City graph</span><strong>{c.intersections} intersections</strong>
+                    <span>{c.roads} roads · {c.junctions} junctions without signal · {c.sources} sources · {c.sinks} sinks</span>
+                  </li>
+                </ol>
+              </CollapsiblePanel>
             </>
           )}
 
           {s && view === 'full' && (
-            <section className={styles.panel}>
-              <h2>Full road graph</h2>
+            <CollapsiblePanel id="fullGraph" title={'Full road graph'} panels={panels} className={styles.panel}>
               <div className={styles.statGrid}>
                 <StatTile label="Junctions" value={s.junctions} />
                 <StatTile label="Signalized" value={s.signalized} color={JUNCTION_KINDS.signalized.color} />
@@ -485,32 +520,27 @@ export default function NetworkExplorerPage() {
                 <StatTile label="Road length" value={`${s.totalRoadKm} km`} />
                 <StatTile label="Parts" value={s.components} />
               </div>
-              <div className={styles.subhead}>How much comes directly from OSM</div>
+              <div className={styles.subhead}>Taken from OSM</div>
               <CoverageBar label="Lane counts" pct={s.coverage.lanesFromOsmPct} />
               <CoverageBar label="Speed limits" pct={s.coverage.speedFromOsmPct} />
-              <p className={styles.hint}>Everything downloaded, including the margin. The rest uses per-class defaults (see Model assumptions).</p>
               {graph.warnings.map((w) => <div key={w} className={styles.warnText}>{w}</div>)}
               <div className={styles.downloadRow}>
                 <button type="button" className={styles.secondaryBtn} onClick={() => downloadJson(`road-graph-${slug}.json`, { ...graph, source: sourceMeta() })}>Download graph JSON</button>
                 <button type="button" className={styles.secondaryBtn} onClick={() => downloadJson(`osm-${slug}.json`, { ...osm.data, urbangrid: { area: osm.area, downloadBox: osm.meta.downloadBox, detail: osm.detail, fetchedAt: osm.meta.fetchedAt, placeName: osm.placeName } })}>Save OSM data</button>
               </div>
-            </section>
+            </CollapsiblePanel>
           )}
 
-          <section className={styles.panel}>
-            <button type="button" className={styles.collapseHead} onClick={() => setShowAssumptions((v) => !v)} aria-expanded={showAssumptions}>
-              <h2>Model assumptions</h2>
-              <span>{showAssumptions ? '−' : '+'}</span>
-            </button>
-            {showAssumptions && (
+          <CollapsiblePanel id="assumptions" title="Model assumptions" panels={panels} className={styles.panel}>
+            {(
               <>
-                <p className={styles.hint}>
-                  City graph: signalized intersections inside your area, joined by main roads (primary, secondary, tertiary). An
-                  intersection is kept only where two movements cross and no grid phase can run them together; roundabouts up to
-                  200 m across count as one signalized intersection. Merge/split points are folded into the roads. Roads leaving the
-                  area are followed to the first junction outside it, which becomes the source/sink. Left turns are free.
-                </p>
-                <p className={styles.hint}>Road defaults below are used only when OSM has no tag. Every value in the inspector shows its source.</p>
+                <ul className={styles.ruleList}>
+                  <li>Main roads only</li>
+                  <li>Signals where movements cross</li>
+                  <li>Roundabouts up to 200 m = one intersection</li>
+                  <li>Left turns are free</li>
+                  <li>Defaults below fill missing OSM tags</li>
+                </ul>
                 <table className={styles.table}>
                   <thead><tr><th>Road class</th><th>Lanes / dir</th><th>Speed</th></tr></thead>
                   <tbody>
@@ -531,15 +561,15 @@ export default function NetworkExplorerPage() {
                 </dl>
               </>
             )}
-          </section>
+          </CollapsiblePanel>
 
           <footer className={styles.attribution}>
-            Road data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL),
-            fetched live via the free Overpass API{osm?.meta.osmTimestamp ? ` · OSM snapshot ${new Date(osm.meta.osmTimestamp).toLocaleString()}` : ''}.
+            Road data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL)
           </footer>
-        </aside>
+        </CollapsibleSidebar>
 
         <main className={styles.mapArea}>
+          <div className={styles.mapCard}>
           <NetworkMap
             scene={scene}
             downloadBox={mode === 'explore' ? osm?.meta.downloadBox : null}
@@ -568,7 +598,12 @@ export default function NetworkExplorerPage() {
               ))}
             </div>
           )}
-          {graph && view === 'city' && (
+          {graph && !overlays.isOpen('mapOptions') && (
+            <button type="button" className={`${styles.overlayBtn} ${styles.overlayBtnTop}`} onClick={() => overlays.setOpen('mapOptions', true)}>
+              Map options
+            </button>
+          )}
+          {graph && view === 'city' && overlays.isOpen('mapOptions') && (
             <div className={`${styles.mapControls} ${styles.mapControlsLower}`}>
               <span>Roads</span>
               <Segmented options={{ straight: 'Straight', real: 'Real shape' }} value={shape} onChange={setShape} />
@@ -576,6 +611,7 @@ export default function NetworkExplorerPage() {
               <Segmented options={{ off: 'Off', dim: 'Dim', on: 'On' }} value={mapMode} onChange={setMapMode} />
               <Segmented options={MAP_STYLES} value={mapStyle} onChange={setMapStyle} />
               <Segmented options={{ on: 'Labels', off: 'No labels' }} value={showLabels ? 'on' : 'off'} onChange={(v) => setShowLabels(v === 'on')} />
+              <button type="button" className={styles.overlayClose} onClick={() => overlays.setOpen('mapOptions', false)} aria-label="Hide map options">×</button>
             </div>
           )}
           {!graph && (
@@ -584,16 +620,26 @@ export default function NetworkExplorerPage() {
               <Segmented options={MAP_STYLES} value={mapStyle} onChange={setMapStyle} />
             </div>
           )}
-          {graph && view === 'full' && (
+          {graph && view === 'full' && overlays.isOpen('mapOptions') && (
             <div className={`${styles.mapControls} ${styles.mapControlsLower}`}>
-              <span>Colour roads by</span>
+              <span>Colour by</span>
               <Segmented options={COLOR_MODES} value={colorBy} onChange={setColorBy} />
               <span>Map</span>
               <Segmented options={MAP_STYLES} value={mapStyle} onChange={setMapStyle} />
+              <button type="button" className={styles.overlayClose} onClick={() => overlays.setOpen('mapOptions', false)} aria-label="Hide map options">×</button>
             </div>
           )}
-          {graph && (
+          {graph && !overlays.isOpen('legend') && (
+            <button type="button" className={`${styles.overlayBtn} ${styles.overlayBtnBottom}`} onClick={() => overlays.setOpen('legend', true)}>
+              Legend
+            </button>
+          )}
+          {graph && overlays.isOpen('legend') && (
             <div className={styles.legend}>
+              <div className={styles.legendHead}>
+                <span>Legend</span>
+                <button type="button" className={styles.overlayClose} onClick={() => overlays.setOpen('legend', false)} aria-label="Hide legend">×</button>
+              </div>
               {view === 'city' ? (
                 cityLegend().map((item) => (
                   <div key={item.label} className={styles.legendRow}>
@@ -627,14 +673,15 @@ export default function NetworkExplorerPage() {
           )}
           {drawMode && (
             <div className={styles.mapHint}>
-              {draftPoints.length < 3 ? 'Click to add corners…' : 'Click the green first corner (or press Enter) to close the shape'}
+              {draftPoints.length < 3 ? 'Click to add corners' : 'Click the first corner or press Enter to finish'}
             </div>
           )}
           {!graph && !busy && !drawMode && (
             <div className={styles.mapHint}>
-              {placeName ? `Adjust the area over ${placeName}, then extract.` : 'Search a place, adjust or draw the area, then extract its city graph.'}
+              {placeName ? `Adjust the area over ${placeName}, then extract.` : 'Find a place, set the area, then extract.'}
             </div>
           )}
+          </div>
         </main>
 
         {view === 'city'

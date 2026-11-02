@@ -14,6 +14,17 @@ const PANES = [
   ['nx-selected', 440, false],
 ];
 
+// Leaflet can run one queued canvas redraw after its map was removed
+// (a map taken off the page mid-frame); there is nothing left to draw.
+const canvasRedraw = L.Canvas.prototype._redraw;
+L.Canvas.prototype._redraw = function redrawIfStillOnMap() {
+  if (!this._ctx) {
+    this._redrawRequest = null;
+    return;
+  }
+  canvasRedraw.call(this);
+};
+
 const boxToBounds = (box) => [[box.south, box.west], [box.north, box.east]];
 
 // The same path moved `px` screen pixels to the left of its direction of
@@ -109,6 +120,13 @@ export default function NetworkMap({
   mapStyle = 'dark',
   onMapClick,
   placing = false,
+  // Two maps side by side share one view: each reports where it is and
+  // follows the other.
+  syncView = null,
+  onViewChange,
+  // 'ctrl': on a page that scrolls, the wheel scrolls the page and
+  // Ctrl + wheel (or a pinch) zooms the map, like embedded web maps.
+  wheelZoom = 'always',
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -119,7 +137,7 @@ export default function NetworkMap({
   const areaRef = useRef({ shape: null, margin: null, handles: [], move: null, label: null, dragging: null });
   const [zoom, setZoom] = useState(14);
   const callbacksRef = useRef({});
-  callbacksRef.current = { onSelect, onAreaChange, onDraftChange, onDraftClose, onDraftCancel, onMapClick };
+  callbacksRef.current = { onSelect, onAreaChange, onDraftChange, onDraftClose, onDraftCancel, onMapClick, onViewChange };
   const pendingFitRef = useRef(null);
   const areaPolygonRef = useRef(areaPolygon);
   areaPolygonRef.current = areaPolygon;
@@ -132,6 +150,7 @@ export default function NetworkMap({
       zoomControl: false,
       zoomSnap: 0.25,
       preferCanvas: true,
+      scrollWheelZoom: wheelZoom !== 'ctrl',
     });
     L.control.zoom({ position: 'topleft' }).addTo(map);
     // Free OSM standard tiles, darkened with a CSS filter to match the UI.
@@ -159,13 +178,17 @@ export default function NetworkMap({
       if (callbacksRef.current.onMapClick) callbacksRef.current.onMapClick(e.latlng.lat, e.latlng.lng);
       else callbacksRef.current.onSelect?.(null);
     });
+    map.on('moveend', () => {
+      const c = map.getCenter();
+      callbacksRef.current.onViewChange?.({ center: [c.lat, c.lng], zoom: map.getZoom() });
+    });
     map.on('zoomend', () => {
       const z = map.getZoom();
       setZoom(z);
       for (const { marker, point } of pointMarkersRef.current) marker.setRadius(point.radius(z));
     });
     mapRef.current = map;
-    if (import.meta.env.DEV) window.__networkMap = map; // test/debug hook
+    if (import.meta.env.DEV) { window.__networkMap = map; window.__networkMaps = [...(window.__networkMaps || []).filter((m) => m._container?.isConnected), map]; } // test/debug hook
 
     // Keep Leaflet's size in sync with the CSS layout.
     const resizeObserver = new ResizeObserver(() => {
@@ -375,6 +398,10 @@ export default function NetworkMap({
     const group = layersRef.current.network;
     const deco = layersRef.current.decorations;
     if (!group) return;
+    // The layout may have changed since the last draw (a second map joined
+    // this one); the resize observer can lag behind, so check the size here
+    // too. Cheap when nothing changed.
+    mapRef.current?.invalidateSize();
     group.clearLayers();
     deco.clearLayers();
     pointMarkersRef.current = [];
@@ -480,11 +507,59 @@ export default function NetworkMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
 
+  // Follow the shared view of a map shown beside this one.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !syncView) return;
+    const c = map.getCenter();
+    const same = Math.abs(c.lat - syncView.center[0]) < 1e-7 && Math.abs(c.lng - syncView.center[1]) < 1e-7 && map.getZoom() === syncView.zoom;
+    if (!same) map.setView(syncView.center, syncView.zoom, { animate: false });
+  }, [syncView]);
+
   // Crosshair while the page is waiting for a spot on the map.
   useEffect(() => {
     const el = mapRef.current?.getContainer();
     if (el) el.style.cursor = placing ? 'crosshair' : '';
   }, [placing]);
 
-  return <div ref={containerRef} className={styles.map} />;
+  // Ctrl + wheel zooms around the pointer; a plain wheel scrolls the page
+  // and briefly shows how to zoom.
+  const [wheelHint, setWheelHint] = useState(false);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (wheelZoom !== 'ctrl' || !el) return undefined;
+    let pending = 0;
+    let last = 0;
+    let hintTimer = null;
+    const onWheel = (e) => {
+      const map = mapRef.current;
+      if (!map) return;
+      if (!(e.ctrlKey || e.metaKey)) {
+        setWheelHint(true);
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(() => setWheelHint(false), 1200);
+        return; // the page scrolls
+      }
+      e.preventDefault();
+      setWheelHint(false);
+      pending += e.deltaY;
+      const now = performance.now();
+      if (Math.abs(pending) < 40 || now - last < 120) return;
+      last = now;
+      const point = map.mouseEventToContainerPoint(e);
+      map.setZoomAround(point, map.getZoom() + (pending < 0 ? 0.5 : -0.5));
+      pending = 0;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      clearTimeout(hintTimer);
+    };
+  }, [wheelZoom]);
+
+  return (
+    <div ref={containerRef} className={styles.map}>
+      {wheelHint && <div className={styles.wheelHint}>Hold Ctrl and scroll to zoom the map</div>}
+    </div>
+  );
 }

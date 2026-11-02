@@ -3,23 +3,29 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api.js';
 import Logo from '../Logo.jsx';
 import NetworkMap from '../network/NetworkMap.jsx';
-import { buildCityScene, cityLegend, LOAD_STOPS, QUEUE_STOPS } from '../network/scenes.js';
+import { buildCityScene, cityLegend, CONGESTION } from '../network/scenes.js';
 import { useCityStore } from '../../store/useCityStore.js';
-import { DEFAULT_CITY_SIM_CONFIG } from '../../simulation/cityNetwork.js';
+import { DEFAULT_CITY_SIM_CONFIG, inflowFor, sourceGateways } from '../../simulation/cityNetwork.js';
+import { isDataProfile } from '../../simulation/dataInflow.js';
 import { addNode, connectNodes, moveNode, splitRoadAt } from '../../network/cityModel.js';
 import { makeConstantInflowProfile } from '../../simulation/arrivalProfile.js';
 import CityEditPanel from './CityEditPanel.jsx';
 import CityStatsDashboard from './CityStatsDashboard.jsx';
 import MultiSeedPanel from './MultiSeedPanel.jsx';
+import ExperimentPanel from '../experiments/ExperimentPanel.jsx';
+import { FEATURES } from '../../features.js';
+import { CollapsiblePanel, CollapsibleSidebar, usePanels } from '../common/Collapsible.jsx';
 import { MAP_STYLES, useMapStyle } from '../network/useMapStyle.js';
 import nx from '../network/NetworkExplorer.module.css';
 import styles from './CitySimulator.module.css';
 
 // Same colours as the analytics dashboard (grid simulator convention).
 const POLICY_COLORS = { fixed: '#f59e0b', greedy: '#22c55e' };
+const POLICY_NAMES = { fixed: 'Fixed cycle', greedy: 'Greedy (adaptive)' };
 const MAP_OPACITY = { off: 0, dim: 0.35, on: 1 };
 const NODE_TOOLS = { intersection: 'Add intersection', junction: 'Add junction', gateway: 'Add source/sink' };
 const NODE_TYPES = ['intersection', 'junction', 'gateway'];
+const LAYOUT_KEY = 'urbangrid-city-map-layout';
 
 function Segmented({ options, value, onChange, disabled }) {
   return (
@@ -60,6 +66,46 @@ function NumberField({ value, onChange, min = 0, step = 1, max }) {
   );
 }
 
+// What the live intersection colours mean.
+function CongestionKey({ onClose }) {
+  return (
+    <div className={styles.congestionKey}>
+      <div className={styles.keyHead} title="Cars waiting at the intersection, all arms together.">
+        <strong>Intersection congestion</strong>
+        <button type="button" onClick={onClose} aria-label="Hide colour key">×</button>
+      </div>
+      {CONGESTION.map((c) => (
+        <div key={c.key} className={styles.keyRow} style={{ '--c': c.color }}>
+          <span className={styles.keyName}><i />{c.label}</span>
+          <span>{c.intersection}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// One map in its own card, headed by its policy.
+function MapCard({ policy, children }) {
+  return (
+    <section className={styles.mapCard} style={{ '--policy': policy ? POLICY_COLORS[policy] : '#38bdf8' }}>
+      <header className={styles.cardHead}>
+        <span className={styles.cardDot} />
+        <strong>{policy ? POLICY_NAMES[policy] : 'City network'}</strong>
+        {!policy && <span className={styles.cardStats}>Click anything to edit it</span>}
+      </header>
+      <div className={styles.cardBody}>{children}</div>
+    </section>
+  );
+}
+
+const savedLayout = () => {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === 'single' ? 'single' : 'split';
+  } catch {
+    return 'split';
+  }
+};
+
 export default function CitySimulatorPage() {
   const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
@@ -69,20 +115,36 @@ export default function CitySimulatorPage() {
   const [mapMode, setMapMode] = useState('dim');
   const [mapStyle, setMapStyle] = useMapStyle();
   const [showLabels, setShowLabels] = useState(true);
-  const [resultsOpen, setResultsOpen] = useState(true);
   const [showWeights, setShowWeights] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  // The congestion colour key, shown on the map while a run is on screen.
+  const [showKey, setShowKeyState] = useState(() => {
+    try { return localStorage.getItem('urbangrid-city-congestion-key') !== 'off'; } catch { return true; }
+  });
+  const setShowKey = (on) => {
+    setShowKeyState(on);
+    try { localStorage.setItem('urbangrid-city-congestion-key', on ? 'on' : 'off'); } catch { /* per browser only */ }
+  };
+  // Side by side (Fixed | Greedy) while a run exists, or one map.
+  const [layout, setLayoutState] = useState(savedLayout);
+  const [sharedView, setSharedView] = useState(null);
   // Editing: tool is null, a node kind to place, 'road' or 'move'.
   const [tool, setTool] = useState(null);
   const [toolNode, setToolNode] = useState(null);
   const [twoWay, setTwoWay] = useState(true);
   const [notice, setNotice] = useState(null);
+  const panels = usePanels('urbangrid-city-panels', { network: true, run: true, edit: false, traffic: false, simulation: false });
 
   const {
-    city, meta, config, overrides, inflows, snapshot, isRunning, speed, engine, history, future, original,
+    city, meta, config, overrides, inflows, snapshot, isRunning, speed, engine, history, future, original, runError,
     setConfig, setAllInflows, clearOverrides, start, pause, reset, stepOnce, runToEnd, setSpeed,
     editModel, undo, redo, restoreOriginal,
   } = useCityStore();
+
+  const setLayout = (value) => {
+    setLayoutState(value);
+    try { localStorage.setItem(LAYOUT_KEY, value); } catch { /* per-browser only */ }
+  };
 
   const stopTool = useCallback(() => {
     setTool(null);
@@ -159,26 +221,33 @@ export default function CitySimulatorPage() {
       ...Object.keys(overrides.links || {}).map((id) => linkById.get(id)?.roadId),
       ...Object.keys(overrides.turns || {}),
       ...Object.keys(overrides.departure || {}),
-      ...Object.keys(inflows || {}).map((id) => linkById.get(id)?.from),
+      ...Object.keys(inflows || {}),
       ...city.model.nodes.filter((n) => n.custom).map((n) => n.id),
       ...city.links.filter((l) => l.custom).map((l) => l.roadId),
     ].filter(Boolean));
   }, [overrides, inflows, city]);
 
-  const live = useMemo(() => {
+  const liveOf = useCallback((policy) => {
     if (!snapshot || !engine) return null;
-    const s = snapshot[liveView];
+    const s = snapshot[policy];
     return {
       queues: Object.fromEntries(Object.entries(s.intersections).map(([id, v]) => [id, v.totalQueued])),
       phases: Object.fromEntries(Object.entries(s.intersections).map(([id, v]) => [id, v.currentPhase])),
+      armQueues: Object.fromEntries(Object.entries(s.intersections).map(([id, v]) => [id, v.queueLengths])),
       linkCars: s.links || {},
     };
-  }, [snapshot, liveView, engine]);
+  }, [snapshot, engine]);
 
-  const scene = useMemo(
-    () => (city ? buildCityScene(city, { shape, showLabels, live, marked: edited, lightMap: mapStyle === 'light' && mapMode !== 'off', pending: toolNode, labelJunctions: Boolean(tool) }) : null),
-    [city, shape, showLabels, live, edited, mapStyle, mapMode, toolNode, tool],
-  );
+  const split = layout === 'split' && Boolean(snapshot);
+  const sceneOptions = { shape, showLabels, marked: edited, lightMap: mapStyle === 'light' && mapMode !== 'off', pending: toolNode, labelJunctions: Boolean(tool) };
+  const sceneFor = (policy) => (city ? buildCityScene(city, { ...sceneOptions, live: liveOf(policy) }) : null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sceneFixed = useMemo(() => sceneFor('fixed'), [city, shape, showLabels, liveOf, edited, mapStyle, mapMode, toolNode, tool]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sceneGreedy = useMemo(() => sceneFor('greedy'), [city, shape, showLabels, liveOf, edited, mapStyle, mapMode, toolNode, tool]);
+  const sceneSingle = liveView === 'fixed' ? sceneFixed : sceneGreedy;
+  const intersectionNames = useMemo(() => Object.fromEntries((city?.intersections || []).map((i) => [i.id, i.name || ''])), [city]);
+
   // What is selected must still exist after an edit or an undo.
   const activeSelection = useMemo(() => {
     if (!selection || !city) return null;
@@ -234,25 +303,67 @@ export default function CitySimulatorPage() {
   const editedCount = Object.keys(overrides.links || {}).length + Object.keys(overrides.turns || {}).length + Object.keys(overrides.departure || {}).length + Object.keys(inflows || {}).length;
   const graphChanged = city.model !== original;
 
+  const mapProps = {
+    selection: activeSelection,
+    onSelect: handleSelect,
+    onMapClick: tool && tool !== 'road' ? handleMapClick : undefined,
+    placing: Boolean(tool),
+    fitTarget,
+    mapOpacity: MAP_OPACITY[mapMode],
+    mapStyle,
+    syncView: sharedView,
+    onViewChange: setSharedView,
+    // The page scrolls: the wheel scrolls it, Ctrl + wheel zooms the map.
+    wheelZoom: 'ctrl',
+  };
+
   return (
-    <div className={nx.page}>
+    <div className={styles.page}>
       {header}
-      <div className={nx.body}>
-        <aside className={nx.sidebar}>
-          <section className={nx.panel}>
-            <h2>{meta?.placeName || 'City network'}</h2>
+      <div className={styles.simBlock}>
+        <CollapsibleSidebar panels={panels} className={`${nx.sidebar} ${styles.sidebar}`} label="Controls">
+          {FEATURES.networkSummary && <CollapsiblePanel id="network" title={meta?.placeName || 'City network'} panels={panels} className={nx.panel}>
             <div className={nx.statGrid}>
               <div className={nx.statTile}><span className={nx.statValue}>{s.intersections}</span><span className={nx.statLabel}>Intersections</span></div>
-              <div className={nx.statTile}><span className={nx.statValue}>{s.junctions}</span><span className={nx.statLabel}>Junctions</span></div>
               <div className={nx.statTile}><span className={nx.statValue}>{s.roads}</span><span className={nx.statLabel}>Roads</span></div>
+              <div className={nx.statTile}><span className={nx.statValue}>{s.junctions}</span><span className={nx.statLabel}>Junctions</span></div>
               <div className={nx.statTile}><span className={nx.statValue}>{s.sources}</span><span className={nx.statLabel}>Sources</span></div>
               <div className={nx.statTile}><span className={nx.statValue}>{s.sinks}</span><span className={nx.statLabel}>Sinks</span></div>
             </div>
             <Link to="/network" className={nx.linkBtn}>Change area</Link>
-          </section>
+          </CollapsiblePanel>}
 
-          <section className={nx.panel}>
-            <h2>Edit Network</h2>
+          <CollapsiblePanel id="run" title="Run" panels={panels} className={nx.panel}>
+            <div className={styles.runRow}>
+              {isRunning
+                ? <button type="button" className={nx.primaryBtn} onClick={pause}>Pause</button>
+                : <button type="button" className={nx.primaryBtn} onClick={start} disabled={snapshot?.isComplete}>{snapshot && snapshot.time > 0 ? 'Resume' : 'Run'}</button>}
+              <button type="button" className={nx.secondaryBtn} onClick={stepOnce} disabled={isRunning || snapshot?.isComplete}>Step</button>
+              <button type="button" className={nx.secondaryBtn} onClick={runToEnd} disabled={isRunning || snapshot?.isComplete}>To end</button>
+              <button type="button" className={nx.secondaryBtn} onClick={reset} disabled={!snapshot}>Reset</button>
+            </div>
+            <div className={styles.progress}><div style={{ width: `${progress * 100}%` }} /></div>
+            <div className={styles.progressLabel}>
+              Step {snapshot ? snapshot.time : 0} / {config.simDuration}
+              {snapshot?.isComplete && ' · complete'}
+            </div>
+            {runError && <div className={nx.errorText} role="alert">{runError}</div>}
+            <Field label={`Simulation Speed: ${speed} steps/s`}>
+              <input type="range" min="1" max="120" value={speed} onChange={(e) => setSpeed(parseInt(e.target.value, 10))} />
+            </Field>
+            <Field label="Maps while running">
+              <Segmented options={{ split: 'Side by side', single: 'One map' }} value={layout} onChange={setLayout} />
+            </Field>
+            {layout === 'single' && (
+              <Field label="Colour the map by">
+                <Segmented options={{ fixed: 'Fixed cycle', greedy: 'Greedy' }} value={liveView} onChange={setLiveView} />
+              </Field>
+            )}
+            <a href="#results" className={nx.linkBtn}>Go to results ↓</a>
+            {FEATURES.batchRuns && <a href="#extract-details" className={nx.linkBtn}>Extract details and PDF report ↓</a>}
+          </CollapsiblePanel>
+
+          <CollapsiblePanel id="edit" title="Edit Network" panels={panels} className={nx.panel}>
             <div className={styles.toolGrid}>
               {Object.entries(NODE_TOOLS).map(([kind, label]) => (
                 <button key={kind} type="button" className={`${nx.secondaryBtn} ${tool === kind ? styles.toolActive : ''}`} onClick={() => (tool === kind ? stopTool() : (setTool(kind), setToolNode(null)))}>{label}</button>
@@ -269,51 +380,28 @@ export default function CitySimulatorPage() {
             {!tool && notice && <div className={styles.toolHint}>{notice}</div>}
             {!tool && <p className={nx.hint}>Click anything on the map to change, move or delete it.</p>}
             {graphChanged && <button type="button" className={nx.linkBtn} onClick={() => { restoreOriginal(); setSelection(null); }}>Restore extracted graph</button>}
-            {city.issues.length > 0 && (
-              <ul className={styles.issueList}>
-                {city.issues.map((issue) => (
-                  <li key={issue.text}>
-                    <button
-                      type="button"
-                      disabled={!issue.nodeId}
-                      onClick={() => {
-                        const node = city.model.nodes.find((n) => n.id === issue.nodeId);
-                        if (node) setSelection({ type: node.kind, id: node.id });
-                      }}
-                    >
-                      {issue.text}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          </CollapsiblePanel>
+          {/* Problems stay visible even when the edit panel is closed. */}
+          {city.issues.length > 0 && (
+            <ul className={styles.issueList}>
+              {city.issues.map((issue) => (
+                <li key={issue.text}>
+                  <button
+                    type="button"
+                    disabled={!issue.nodeId}
+                    onClick={() => {
+                      const node = city.model.nodes.find((n) => n.id === issue.nodeId);
+                      if (node) setSelection({ type: node.kind, id: node.id });
+                    }}
+                  >
+                    {issue.text}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
-          <section className={nx.panel}>
-            <h2>Run</h2>
-            <div className={styles.runRow}>
-              {isRunning
-                ? <button type="button" className={nx.primaryBtn} onClick={pause}>Pause</button>
-                : <button type="button" className={nx.primaryBtn} onClick={start} disabled={snapshot?.isComplete}>{snapshot && snapshot.time > 0 ? 'Resume' : 'Run'}</button>}
-              <button type="button" className={nx.secondaryBtn} onClick={stepOnce} disabled={isRunning || snapshot?.isComplete}>Step</button>
-              <button type="button" className={nx.secondaryBtn} onClick={runToEnd} disabled={isRunning || snapshot?.isComplete}>To end</button>
-              <button type="button" className={nx.secondaryBtn} onClick={reset} disabled={!snapshot}>Reset</button>
-            </div>
-            <div className={styles.progress}><div style={{ width: `${progress * 100}%` }} /></div>
-            <div className={styles.progressLabel}>
-              Step {snapshot ? snapshot.time : 0} / {config.simDuration}
-              {snapshot?.isComplete && ' · complete'}
-            </div>
-            <Field label={`Simulation Speed: ${speed} steps/s`}>
-              <input type="range" min="1" max="120" value={speed} onChange={(e) => setSpeed(parseInt(e.target.value, 10))} />
-            </Field>
-            <Field label="Colour the map by">
-              <Segmented options={{ fixed: 'Fixed cycle', greedy: 'Greedy' }} value={liveView} onChange={setLiveView} />
-            </Field>
-          </section>
-
-          <section className={nx.panel}>
-            <h2>Traffic</h2>
+          <CollapsiblePanel id="traffic" title="Traffic" panels={panels} className={nx.panel}>
             <Field label="Default Inflow per Source (cars/step)">
               <NumberField
                 value={defaultCarsPerStep}
@@ -346,10 +434,9 @@ export default function CitySimulatorPage() {
                 <button type="button" className={nx.linkBtn} onClick={() => setAllInflows({})}>Clear inflows</button>
               </div>
             )}
-          </section>
+          </CollapsiblePanel>
 
-          <section className={nx.panel}>
-            <h2>Simulation</h2>
+          <CollapsiblePanel id="simulation" title="Simulation" panels={panels} className={nx.panel}>
             <div className={styles.fieldGrid}>
               <Field label="Total Duration (Steps)"><NumberField value={config.simDuration} min={10} onChange={(v) => setConfig({ simDuration: Math.round(v) })} /></Field>
               <Field label="Simulation Seed"><NumberField value={config.seed} onChange={(v) => setConfig({ seed: Math.floor(v) })} /></Field>
@@ -389,39 +476,35 @@ export default function CitySimulatorPage() {
               </>
             )}
             <button type="button" className={nx.linkBtn} onClick={() => setConfig({ ...DEFAULT_CITY_SIM_CONFIG })}>Restore defaults</button>
-          </section>
-        </aside>
+          </CollapsiblePanel>
+        </CollapsibleSidebar>
 
-        <main className={styles.main}>
-          <div className={styles.mapWrap}>
-            <NetworkMap
-              scene={scene}
-              selection={activeSelection}
-              onSelect={handleSelect}
-              onMapClick={tool && tool !== 'road' ? handleMapClick : undefined}
-              placing={Boolean(tool)}
-              fitTarget={fitTarget}
-              mapOpacity={MAP_OPACITY[mapMode]}
-              mapStyle={mapStyle}
-            />
-            <div className={nx.mapControls} style={{ top: 12, flexWrap: 'wrap', maxWidth: 'calc(100% - 80px)' }}>
-              <span>Roads</span>
-              <Segmented options={{ straight: 'Straight', real: 'Real shape' }} value={shape} onChange={setShape} />
-              <span>Map</span>
-              <Segmented options={{ off: 'Off', dim: 'Dim', on: 'On' }} value={mapMode} onChange={setMapMode} />
-              <Segmented options={MAP_STYLES} value={mapStyle} onChange={setMapStyle} />
-              <Segmented options={{ on: 'Labels', off: 'No labels' }} value={showLabels ? 'on' : 'off'} onChange={(v) => setShowLabels(v === 'on')} />
-              <button type="button" className={`${nx.secondaryBtn} ${showLegend ? nx.drawActive : ''}`} style={{ marginTop: 0, padding: '4px 10px' }} onClick={() => setShowLegend((v) => !v)}>Legend</button>
-            </div>
+        <main className={styles.mapArea}>
+          <div className={styles.mapToolbar}>
+            <span>Roads</span>
+            <Segmented options={{ straight: 'Straight', real: 'Real shape' }} value={shape} onChange={setShape} />
+            <span>Map</span>
+            <Segmented options={{ off: 'Off', dim: 'Dim', on: 'On' }} value={mapMode} onChange={setMapMode} />
+            <Segmented options={MAP_STYLES} value={mapStyle} onChange={setMapStyle} />
+            <Segmented options={{ on: 'Labels', off: 'No labels' }} value={showLabels ? 'on' : 'off'} onChange={(v) => setShowLabels(v === 'on')} />
+            <button type="button" className={`${nx.secondaryBtn} ${showLegend ? nx.drawActive : ''}`} style={{ marginTop: 0, padding: '4px 10px' }} onClick={() => setShowLegend((v) => !v)}>Legend</button>
+            {snapshot && !showKey && (
+              <button type="button" className={nx.secondaryBtn} style={{ marginTop: 0, padding: '4px 10px' }} onClick={() => setShowKey(true)}>Colours</button>
+            )}
+            {snapshot && (
+              <span className={styles.toolbarStep}>Step {snapshot.time} / {config.simDuration}</span>
+            )}
+          </div>
+          <div className={`${styles.maps} ${split ? styles.mapsSplit : ''}`}>
+            {/* The first map stays on the page; the second joins it while a run is shown side by side. */}
+            {(split ? ['fixed', 'greedy'] : [liveView]).map((policy, k) => (
+              <MapCard key={k === 0 ? 'first' : 'second'} policy={snapshot ? policy : null}>
+                <NetworkMap scene={!split ? sceneSingle : policy === 'fixed' ? sceneFixed : sceneGreedy} {...mapProps} />
+                {k === 0 && snapshot && showKey && <CongestionKey onClose={() => setShowKey(false)} />}
+              </MapCard>
+            ))}
             {showLegend && <div className={nx.legend}>
-              {live ? (
-                <>
-                  <div className={nx.legendTitle}>Vehicles queued · {liveView === 'fixed' ? 'Fixed cycle' : 'Greedy'}</div>
-                  {QUEUE_STOPS.map((st) => <div key={st.label} className={nx.legendRow}><span className={nx.legendDot} style={{ '--c': st.color }} />{st.label}</div>)}
-                  <div className={nx.legendTitle}>Road fullness</div>
-                  {LOAD_STOPS.map((st) => <div key={st.label} className={nx.legendRow}><span className={nx.legendLine} style={{ '--c': st.color }} />{st.label}</div>)}
-                </>
-              ) : (
+              {(
                 cityLegend().map((item) => (
                   <div key={item.label} className={nx.legendRow}>
                     <span
@@ -436,23 +519,40 @@ export default function CitySimulatorPage() {
             </div>}
             <CityEditPanel selection={activeSelection} onSelect={setSelection} tools={tools} />
           </div>
-
-          <div className={`${styles.drawer} ${resultsOpen ? styles.drawerOpen : ''}`}>
-            <button type="button" className={styles.drawerHead} onClick={() => setResultsOpen((v) => !v)} aria-expanded={resultsOpen}>
-              <span>Results: <i style={{ background: POLICY_COLORS.fixed }} /> Fixed cycle vs <i style={{ background: POLICY_COLORS.greedy }} /> Greedy</span>
-              <span>{resultsOpen ? 'Hide ▾' : 'Show ▴'}</span>
-            </button>
-            {resultsOpen && (
-              <div className={styles.drawerBody}>
-                <CityStatsDashboard snapshot={snapshot} config={config} city={city} />
-                <div className={styles.seedSection}>
-                  <MultiSeedPanel />
-                </div>
-              </div>
-            )}
-          </div>
         </main>
       </div>
+
+      <section id="results" className={styles.resultsPage}>
+        <h2 className={styles.resultsTitle}>
+          Results: <i style={{ background: POLICY_COLORS.fixed }} /> Fixed cycle vs <i style={{ background: POLICY_COLORS.greedy }} /> Greedy
+        </h2>
+        <CityStatsDashboard snapshot={snapshot} config={config} city={city} />
+        {FEATURES.batchRuns && (
+        <>
+        <div className={styles.seedSection}>
+          <MultiSeedPanel />
+        </div>
+        <ExperimentPanel
+          kind="city"
+          title="Fixed cycle vs Greedy: city experiment report"
+          networkLabel={`${meta?.placeName || 'City network'}: ${s.intersections} intersections, ${s.sources} sources, ${s.roads} roads`}
+          makeBase={() => ({ city, config, overrides, inflows })}
+          dataSources={sourceGateways(city).map((g) => ({ label: g.id, profile: inflowFor(g, city, config, inflows) })).filter((d) => isDataProfile(d.profile))}
+          defaults={{ duration: config.simDuration, baseRate: Number(defaultCarsPerStep) || 1, baseSeed: config.seed }}
+          rateHint={`Cars per step at each of the ${s.sources} sources (Normal level).`}
+          intersectionNames={intersectionNames}
+          setupRows={[
+            ['Intersections / sources / sinks', `${s.intersections} / ${s.sources} / ${s.sinks}`],
+            ['Fixed-cycle phase-change interval', `${config.fixedCycleInterval} steps`],
+            ['Greedy decision interval / lookahead', `${config.greedyDecisionInterval} / ${config.lookaheadH} steps`],
+            ['Greedy weights w1 to w4', [config.totalWaitWeight, config.totalWaitStdWeight, config.queueWeight, config.queueStdWeight].join(', ')],
+            ['Vehicles served per green step', `${config.departurePerLane} per lane`],
+            ['Road capacity limit', config.spillback ? 'On' : 'Off'],
+          ]}
+        />
+        </>
+        )}
+      </section>
     </div>
   );
 }

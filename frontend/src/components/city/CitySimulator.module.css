@@ -512,3 +512,133 @@
 }
 .issueList li button:disabled { cursor: default; }
 .pickedCard { border-color: #38bdf8 !important; box-shadow: 0 0 0 1px #38bdf8 inset; }
+
+/* ---- Page layout: the simulator is one section of a scrolling page ---- */
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.simBlock {
+  display: flex;
+  height: calc(100vh - 58px);
+  min-height: 560px;
+  border-bottom: 1px solid var(--border-light);
+}
+.sidebar { width: 340px; flex-shrink: 0; }
+.mapArea {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mapToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.toolbarStep { margin-left: auto; font-family: var(--font-mono); color: var(--text-secondary); }
+.maps {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-primary);
+}
+.mapsSplit { grid-template-columns: 1fr 1fr; }
+/* Each map in its own card */
+.mapCard {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-light);
+  border-top: 3px solid var(--policy);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.cardHead strong { color: var(--policy); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cardDot, .cardStats { flex-shrink: 0; }
+.cardStats span { white-space: nowrap; }
+.cardDot { width: 10px; height: 10px; border-radius: 50%; background: var(--policy); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06); }
+.cardStats {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+.cardStats b { color: var(--text-primary); font-family: var(--font-mono); font-size: 0.86rem; }
+.cardBody { position: relative; flex: 1; min-height: 0; }
+
+/* Live congestion colour key on the map */
+.congestionKey {
+  position: absolute;
+  left: 10px;
+  bottom: 22px;
+  z-index: 900;
+  max-width: calc(100% - 20px);
+  padding: 6px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(6px);
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.keyHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; cursor: help; }
+.keyHead strong { color: var(--text-primary); font-size: 0.78rem; }
+.keyHead button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.keyHead button:hover { color: #fff; }
+.keyRow {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 12px;
+  align-items: center;
+}
+.keyRow { padding: 1px 0; }
+.keyName { display: flex; align-items: center; gap: 6px; color: var(--text-primary); font-weight: 600; white-space: nowrap; }
+.keyName i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px rgba(11, 15, 25, 0.9); }
+.keyRow > span:not(.keyName) { white-space: nowrap; }
+
+.resultsPage { padding: 22px 24px 48px; }
+.resultsTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
+  margin: 0 0 14px;
+}
+.resultsTitle i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }

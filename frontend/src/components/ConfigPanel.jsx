@@ -3,8 +3,11 @@ import { useSimStore } from '../store/useSimStore.js';
 import { DIRECTIONS, EXIT_TO_NEIGHBOR_DELTA, APPROACH_TO_HEADING, HEADING_LABELS } from '../simulation/constants.js';
 import { ARRIVAL_PROFILE_TYPES, makeConstantInflowProfile, makeFunctionInflowProfile, makeDefaultDistributionConfig } from '../simulation/arrivalProfile.js';
 import CityImportPanel from './CityImportPanel.jsx';
+import DataFileInflow from './common/DataFileInflow.jsx';
+import { gridDataTimeline } from '../simulation/gridEngineConfig.js';
 import styles from './ConfigPanel.module.css';
 
+const DIR_NAMES = { N: 'North', S: 'South', E: 'East', W: 'West' };
 const DIR_HEADING = { N: 'Northbound', S: 'Southbound', E: 'Eastbound', W: 'Westbound' };
 
 const BOUNDARY_APPROACH_INFO = {
@@ -57,6 +60,7 @@ const ALLOWED_FUNCTION_TYPES = new Set([
   'pulseTrain',
   'randomSeeded',
   'sinCos',
+  'data',
 ]);
 
 export function cloneProfile(profile) {
@@ -74,7 +78,10 @@ export function cloneProfile(profile) {
   };
 }
 
-export function InflowFunctionEditor({ profile, onChange, disabled }) {
+// sourceNames: names a data file column may carry for this source.
+// runSteps: the run length, to warn when a data file is shorter.
+// timeline / onTimelineChange / stepNote: the shared clock of data files.
+export function InflowFunctionEditor({ profile, onChange, disabled, sourceNames = [], runSteps, timeline, onTimelineChange, stepNote }) {
   const fnCfg = profile.functionConfig || makeFunctionInflowProfile().functionConfig;
   const params = fnCfg.params || {};
 
@@ -127,6 +134,19 @@ export function InflowFunctionEditor({ profile, onChange, disabled }) {
         </select>
       </div>
       <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{profileInfo?.description}</div>
+
+      {fnCfg.profileType === 'data' && (
+        <DataFileInflow
+          data={fnCfg.data}
+          onChange={(data) => patchFnCfg({ data })}
+          disabled={disabled}
+          sourceNames={sourceNames}
+          runSteps={runSteps}
+          timeline={timeline}
+          onTimelineChange={onTimelineChange}
+          stepNote={stepNote}
+        />
+      )}
 
       {fnCfg.profileType === 'step' && (
         <div className={styles.roadFields}>
@@ -307,6 +327,13 @@ export default function ConfigPanel() {
   const isPaused = useSimStore((s) => s.isPaused);
 
   const boundaryInflowOverrides = useSimStore((s) => s.boundaryInflowOverrides);
+  // Data-file sources share one clock (step length and start).
+  const dataClock = useMemo(() => gridDataTimeline({ config, boundaryInflowOverrides }), [config, boundaryInflowOverrides]);
+  const setDataClock = (p) => updateConfig({
+    ...(p.stepSeconds != null ? { dataStepSeconds: p.stepSeconds } : {}),
+    ...('start' in p ? { dataStart: p.start } : {}),
+    ...(p.spread ? { dataSpread: p.spread } : {}),
+  });
   const setBoundaryInflowOverride = useSimStore((s) => s.setBoundaryInflowOverride);
   const departureRateOverrides = useSimStore((s) => s.departureRateOverrides);
   const setDepartureRateOverride = useSimStore((s) => s.setDepartureRateOverride);
@@ -644,6 +671,10 @@ export default function ConfigPanel() {
                       profile={baseProfile}
                       onChange={(nextProfile) => setDefaultBoundaryProfile(dir, nextProfile)}
                       disabled={simActive}
+                      sourceNames={[dir, DIR_NAMES[dir]]}
+                      runSteps={config.simDuration}
+                      timeline={dataClock}
+                      onTimelineChange={setDataClock}
                     />
                   )}
 
@@ -799,6 +830,12 @@ export default function ConfigPanel() {
                                 profile={effectiveProfile}
                                 onChange={(nextProfile) => setBoundaryInflowOverride(r, c, dir, nextProfile)}
                                 disabled={simActive}
+                                sourceNames={[`${r},${c},${dir}`, `(${r},${c}) ${dir}`, `r${r}c${c}${dir}`]}
+                                runSteps={config.simDuration}
+                                timeline={dataClock}
+                                onTimelineChange={setDataClock}
+                      timeline={dataClock}
+                      onTimelineChange={setDataClock}
                               />
                             )}
 

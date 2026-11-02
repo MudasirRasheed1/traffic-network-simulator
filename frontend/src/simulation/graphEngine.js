@@ -31,6 +31,7 @@ import {
 } from './constants.js';
 import { PolicyRng } from './rng.js';
 import { evaluateArrivalAt, buildDistributionSeries } from './arrivalProfile.js';
+import { missingDataMessage } from './dataInflow.js';
 
 const EXIT_FOR_INTENT = { T: THROUGH_EXIT, R: RIGHT_EXIT, L: LEFT_EXIT };
 
@@ -80,6 +81,7 @@ export class GraphSimulationEngine {
       spillback: Boolean(config.spillback),
       stepSeconds: config.stepSeconds ?? 1, // only used by 'rate' (veh/h) inflows
       seed: config.seed ?? 2,
+      dataError: config.dataError || null, // data files that cannot be lined up
     };
     this.network = config.network;
     this.currentTime = 0;
@@ -122,6 +124,11 @@ export class GraphSimulationEngine {
     for (const i of net.intersections) {
       this.greedyState.nodes.get(i.id).currentPhase = this.usablePhases(i)[0] || PHASE_NAMES[0];
     }
+
+    // A data-file source without a file stops the run here.
+    const missing = missingDataMessage(net.entries.map((en) => ({ label: en.label || en.key, profile: en.profile })));
+    if (missing) throw new Error(missing);
+    if (cfg.dataError) throw new Error(cfg.dataError);
 
     // Inflow series per entry (same seeding as the grid engine).
     const genRng = new PolicyRng(cfg.seed);

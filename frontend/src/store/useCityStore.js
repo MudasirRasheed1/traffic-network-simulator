@@ -56,13 +56,14 @@ const pick = (obj = {}, keep) => Object.fromEntries(Object.entries(obj).filter((
 function pruneSettings(city, overrides, inflows) {
   const linkIds = new Set(city.links.map((l) => l.id));
   const intersectionIds = new Set(city.intersections.map((i) => i.id));
+  const gatewayIds = new Set(city.gateways.map((g) => g.id));
   return {
     overrides: {
       links: pick(overrides.links, linkIds),
       turns: pick(overrides.turns, intersectionIds),
       departure: pick(overrides.departure, intersectionIds),
     },
-    inflows: pick(inflows, linkIds),
+    inflows: pick(inflows, gatewayIds),
   };
 }
 
@@ -80,6 +81,8 @@ export const useCityStore = create((set, get) => ({
 
   engine: null,
   snapshot: null,
+  // Why the last run could not start (for example, a data file too short).
+  runError: null,
   isRunning: false,
   isPaused: false,
   speed: 12, // steps per second
@@ -95,7 +98,7 @@ export const useCityStore = create((set, get) => ({
   // Any change to the scenario invalidates a run in progress.
   updateScenario: (patch) => {
     get().stopTimer();
-    set({ ...patch, engine: null, snapshot: null, isRunning: false, isPaused: false });
+    set({ ...patch, engine: null, snapshot: null, runError: null, isRunning: false, isPaused: false });
     persist(get());
   },
   setConfig: (patch) => get().updateScenario({ config: { ...get().config, ...patch } }),
@@ -171,14 +174,19 @@ export const useCityStore = create((set, get) => ({
   ensureEngine: () => {
     let { engine } = get();
     if (!engine) {
-      engine = buildEngine(get());
-      set({ engine, snapshot: engine.getSnapshot() });
+      try {
+        engine = buildEngine(get());
+      } catch (err) {
+        set({ runError: err.message });
+        return null;
+      }
+      set({ engine, snapshot: engine.getSnapshot(), runError: null });
     }
     return engine;
   },
   start: () => {
     const engine = get().ensureEngine();
-    if (engine.isComplete) return;
+    if (!engine || engine.isComplete) return;
     get().stopTimer();
     const loop = () => {
       const { engine: eng, isRunning, speed } = get();
@@ -217,7 +225,7 @@ export const useCityStore = create((set, get) => ({
   },
   stepOnce: () => {
     const engine = get().ensureEngine();
-    if (engine.isComplete) return;
+    if (!engine || engine.isComplete) return;
     set({ snapshot: engine.step(), isPaused: true });
   },
   stepBackOnce: () => {
@@ -231,6 +239,7 @@ export const useCityStore = create((set, get) => ({
   runToEnd: () => {
     get().stopTimer();
     const engine = get().ensureEngine();
+    if (!engine) return;
     engine.run();
     set({ snapshot: engine.getSnapshot(), isRunning: false, isPaused: true });
   },

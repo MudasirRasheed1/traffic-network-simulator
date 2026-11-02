@@ -1,0 +1,71 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.card {
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+  min-width: 0;
+}
+.card h4 { margin: 0 0 10px; color: #f8fafc; }
+.card ul { margin: 8px 0; padding-left: 18px; line-height: 1.7; color: #cbd5e1; font-size: 0.9rem; }
+
+.subhead { margin: 24px 0 6px; color: #f8fafc; font-size: 1.05rem; }
+.small { font-size: 0.85rem; color: #94a3b8; margin: 4px 0 8px; }
+.formula {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #0b0f19;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  color: #38bdf8;
+  overflow-x: auto;
+}
+
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 6px 0; }
+.table th, .table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.15); color: #cbd5e1; vertical-align: top; }
+.table th { color: #94a3b8; font-weight: 600; }
+.table code, .points code, .card code, .small code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  padding: 1px 5px;
+  margin: 0 3px 3px 0;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.1);
+  color: #7dd3fc;
+  display: inline-block;
+}
+
+.points { padding-left: 18px; line-height: 1.75; color: #cbd5e1; font-size: 0.9rem; }
+
+.samples { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.samples button {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #0ea5e9;
+  background: rgba(14, 165, 233, 0.12);
+  color: #38bdf8;
+  cursor: pointer;
+}
+.samples button:hover { background: rgba(14, 165, 233, 0.22); }
+
+.code {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #0b0f19;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  overflow-x: auto;
+}

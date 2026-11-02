@@ -463,3 +463,14 @@
   font-family: var(--font-mono);
   font-weight: 700;
 }
+
+/* A run that could not start, for example a data file shorter than the run */
+.runError {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  font-size: 0.85rem;
+}

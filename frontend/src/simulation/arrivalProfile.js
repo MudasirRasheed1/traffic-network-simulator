@@ -1,4 +1,5 @@
 import seedrandom from 'seedrandom';
+import { buildDataSeries } from './dataInflow.js';
 
 export const ARRIVAL_PROFILE_TYPES = [
   { value: 'constant', label: 'Constant', description: 'Same integer inflow at every time step.', wikiUrl: 'https://en.wikipedia.org/wiki/Constant_function' },
@@ -12,6 +13,7 @@ export const ARRIVAL_PROFILE_TYPES = [
   { value: 'logisticLookup', label: 'Logistic-like Growth', description: 'Deterministic S-shaped growth.', wikiUrl: 'https://en.wikipedia.org/wiki/Logistic_function' },
   { value: 'cycle7', label: '7-Step Weekly Cycle', description: 'Seven explicit integer values repeated in order.', wikiUrl: 'https://en.wikipedia.org/wiki/Periodic_function' },
   { value: 'randomSeeded', label: 'Random with Seed', description: 'Seeded deterministic random integer in [min, max].', wikiUrl: 'https://en.wikipedia.org/wiki/Discrete_uniform_distribution' },
+  { value: 'data', label: 'From data file', description: 'Cars per step from your own traffic counts (CSV, Excel, JSON or text).', wikiUrl: null },
   { value: 'sinCos', label: 'Sine + Cosine', description: 'offset + A*sin(.) + B*cos(.), floored at integer timesteps.', wikiUrl: 'https://en.wikipedia.org/wiki/Trigonometric_functions' },
 ];
 
@@ -280,6 +282,19 @@ function evaluateRawArrivalAt(config, t, randomFn, lookupCache) {
     return evaluateFromLookup(lookup, t);
   }
 
+  // Internal (experiments): an explicit number of cars for every step,
+  // repeating if the run is longer than the list.
+  if (profileType === 'sequence') {
+    const values = Array.isArray(config?.sequence) ? config.sequence : [];
+    return values.length ? toNonNegativeInt(values[t % values.length]) : 0;
+  }
+
+  // Your own traffic counts, already turned into cars per step.
+  if (profileType === 'data') {
+    const series = lookupCache.data || (lookupCache.data = buildDataSeries(config?.data, randomFn));
+    return series[t] ?? 0;
+  }
+
   if (profileType === 'cycle7') {
     const cycle = Array.isArray(params.cycleValues) ? params.cycleValues : [];
     const fallback = [0, 0, 0, 0, 0, 0, 0];
@@ -303,6 +318,8 @@ function evaluateRawArrivalAt(config, t, randomFn, lookupCache) {
 }
 
 export function evaluateArrivalAt(config, t, randomFn, lookupCache = {}) {
+  // Counted data is used as it is: no cap, no freeze.
+  if (config?.profileType === 'data') return evaluateRawArrivalAt(config, toNonNegativeInt(t), randomFn, lookupCache);
   const maxCap = Math.max(0, toNonNegativeInt(config?.maxCap, 60));
   const freezeAfterT = config?.freezeAfterT == null || config?.freezeAfterT === ''
     ? null

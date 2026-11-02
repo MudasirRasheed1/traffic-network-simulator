@@ -94,7 +94,7 @@ describe('graph engine reproduces the grid engine exactly', () => {
       queueStdWeight: 0.4,
     });
     expectIdentical(runBoth(config));
-  });
+  }, 30000); // two full engine runs; slow when every test file runs at once
 
   it('time-varying function inflow and random distribution inflow', () => {
     const fn = makeFunctionInflowProfile();

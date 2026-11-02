@@ -5,10 +5,10 @@ import { buildSimulationNetwork } from '../buildSimulationNetwork.js';
 import { buildCityGraph } from '../buildCityGraph.js';
 import { bboxAround } from '../geo.js';
 import {
-  addLink, addNode, addReverseLink, connectNodes, deleteLink, deleteNode, deriveCity, mergeNodes, moveNode, setContinuation, setNodeKind, setTurnAllowed, splitRoadAt, updateLink,
+  addLink, addNode, addReverseLink, connectNodes, deleteLink, deleteNode, deriveCity, mergeNodes, moveNode, roughModel, setContinuation, setNodeKind, setTurnAllowed, simplifyModel, splitRoadAt, updateLink,
 } from '../cityModel.js';
 import { GraphSimulationEngine } from '../../simulation/graphEngine.js';
-import { DEFAULT_CITY_SIM_CONFIG, armDepartureRate, effectiveEdge, engineConfig, sourceLinks } from '../../simulation/cityNetwork.js';
+import { DEFAULT_CITY_SIM_CONFIG, armDepartureRate, effectiveEdge, engineConfig, sourceGateways } from '../../simulation/cityNetwork.js';
 import { PolicyRng } from '../../simulation/rng.js';
 
 const LAT = 28.6;
@@ -133,7 +133,7 @@ describe('city model: a road that splits', () => {
 
   it('sends each car from a source onto one of its routes in that proportion', () => {
     const engine = run(c, 600);
-    const source = sourceLinks(c).find((l) => l.id === 'L1');
+    const source = sourceGateways(c).find((g) => g.id === 'G1');
     const taken = { I2: 0, I3: 0 };
     for (const step of engine.plannedArrivals) for (const a of step) if (a.entryKey === source.id) taken[engine.edgeById.get(a.edgeId).to] += 1;
     expect(taken.I2 + taken.I3).toBe(600);
@@ -370,5 +370,90 @@ describe('city model on real data (Connaught Place)', () => {
       const edited = deriveCity({ ...c, model });
       if (round % 8 === 7) conserves(run(edited, 60));
     }
+  });
+});
+
+describe('simple graph (one road per direction between nodes)', () => {
+  const data = JSON.parse(readFileSync(new URL('./fixtures/delhi-connaught-place.json', import.meta.url)));
+  const download = { south: 28.622776, west: 77.209134, north: 28.640763, east: 77.229627 };
+  const area = bboxAround((download.south + download.north) / 2, (download.west + download.east) / 2, 1.6);
+  const detailed = buildCityGraph(buildSimulationNetwork(buildRoadGraph(data, { bbox: download })), area);
+  const simple = deriveCity({ ...detailed, model: simplifyModel(detailed.model) });
+
+  it('keeps only intersections and sources/sinks, joined directly', () => {
+    expect(detailed.junctions.length).toBeGreaterThan(0);
+    expect(simple.junctions).toHaveLength(0);
+    expect(simple.intersections.map((i) => i.id)).toEqual(detailed.intersections.map((i) => i.id));
+    expect(simple.issues).toEqual([]);
+    for (const e of simple.edges) expect(e.linkIds).toHaveLength(1);
+  });
+
+  it('has at most one road per direction between the same arms of two nodes', () => {
+    const seen = new Set();
+    for (const l of simple.links) {
+      const key = `${l.from}:${l.fromArm}>${l.to}:${l.toArm}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    }
+    expect(simple.links.length).toBeLessThan(detailed.links.length);
+  });
+
+  it('keeps every arm, turn and phase of every intersection', () => {
+    for (const i of detailed.intersections) {
+      const s = simple.intersections.find((x) => x.id === i.id);
+      expect(Object.keys(s.arms).sort()).toEqual(Object.keys(i.arms).sort());
+      expect(s.phases.map((p) => p.name)).toEqual(i.phases.map((p) => p.name));
+    }
+  });
+
+  it('simulates the same traffic as the detailed graph', () => {
+    const run = (c) => {
+      const engine = new GraphSimulationEngine(engineConfig(c, { ...DEFAULT_CITY_SIM_CONFIG, simDuration: 300 }, {}, {}));
+      engine.init();
+      engine.run();
+      return engine.globalMetrics;
+    };
+    const a = run(detailed);
+    const b = run(simple);
+    expect(b.fixed.totalVehiclesEntered).toBe(a.fixed.totalVehiclesEntered);
+    for (const pol of ['fixed', 'greedy']) {
+      const qa = a[pol].sumQueueSizes.reduce((x, y) => x + y, 0);
+      const qb = b[pol].sumQueueSizes.reduce((x, y) => x + y, 0);
+      expect(Math.abs(qb - qa) / qa).toBeLessThan(0.05);
+    }
+  });
+});
+
+describe('rough graph (nearby intersections and sources joined)', () => {
+  const data = JSON.parse(readFileSync(new URL('./fixtures/delhi-connaught-place.json', import.meta.url)));
+  const download = { south: 28.622776, west: 77.209134, north: 28.640763, east: 77.229627 };
+  const area = bboxAround((download.south + download.north) / 2, (download.west + download.east) / 2, 1.6);
+  const detailed = buildCityGraph(buildSimulationNetwork(buildRoadGraph(data, { bbox: download })), area);
+  const simple = deriveCity({ ...detailed, model: simplifyModel(detailed.model) });
+  const rough = deriveCity({ ...detailed, model: roughModel(detailed.model) });
+
+  it('has fewer nodes than the simple graph and one road per direction between two nodes', () => {
+    expect(rough.intersections.length).toBeGreaterThan(0);
+    expect(rough.intersections.length + rough.gateways.length).toBeLessThan(simple.intersections.length + simple.gateways.length);
+    const seen = new Set();
+    for (const l of rough.links) {
+      expect(l.from).not.toBe(l.to);
+      const key = `${l.from}>${l.to}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+    }
+  });
+
+  it('keeps no two intersections closer than the merge distance', () => {
+    const dist = (a, b) => Math.hypot((a.lat - b.lat) * 111195, (a.lon - b.lon) * 111195 * Math.cos((a.lat * Math.PI) / 180));
+    const close = rough.intersections.flatMap((a, i) => rough.intersections.slice(i + 1).filter((b) => dist(a, b) < 100));
+    expect(close).toHaveLength(0);
+  });
+
+  it('still simulates and conserves cars', () => {
+    expect(rough.edges.some((e) => e.kind === 'feeder')).toBe(true);
+    const engine = run(rough, 200);
+    conserves(engine);
+    expect(engine.globalMetrics.fixed.totalVehiclesEntered).toBeGreaterThan(0);
   });
 });

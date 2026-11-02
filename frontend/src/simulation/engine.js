@@ -18,6 +18,7 @@ import {
 } from './constants.js';
 import { PolicyRng } from './rng.js';
 import { evaluateArrivalAt, buildDistributionSeries } from './arrivalProfile.js';
+import { missingDataMessage } from './dataInflow.js';
 
 // =====================================================
 // CAR FACTORY
@@ -232,6 +233,7 @@ export class SimulationEngine {
       },
       seed: config.seed ?? 2,
       drivingSide: config.drivingSide === 'right' ? 'right' : 'left',
+      dataError: config.dataError || null, // data files that cannot be lined up
     };
 
     const phaseConfig = buildPhaseConfig(this.config.drivingSide);
@@ -343,6 +345,17 @@ export class SimulationEngine {
     this.plannedBoundaryArrivalsByApproachSeries = { N: [], S: [], E: [], W: [] };
     const inflowRngByKey = {};
     const inflowLookupByKey = {};
+    const dataEntries = [];
+    for (let r = 0; r < cfg.gridSize; r++) {
+      for (let c = 0; c < cfg.gridSize; c++) {
+        for (const [d, profile] of Object.entries(cfg.boundaryInflowProfiles?.[r]?.[c] || {})) {
+          dataEntries.push({ label: `(${r},${c}) ${d}`, profile });
+        }
+      }
+    }
+    const missing = missingDataMessage(dataEntries);
+    if (missing) throw new Error(missing);
+    if (cfg.dataError) throw new Error(cfg.dataError);
 
     for (let r = 0; r < cfg.gridSize; r++) {
       for (let c = 0; c < cfg.gridSize; c++) {

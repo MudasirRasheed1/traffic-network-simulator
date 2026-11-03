@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../utils/api.js';
 import Logo from './Logo.jsx';
 import TrafficDataDocs from './docs/TrafficDataDocs.jsx';
 import styles from './DocsPage.module.css';
+import SiteHeader from './common/SiteHeader.jsx';
 
 const DIRECTION_CONFIG = {
   N: { name: 'North', color: '#38bdf8', flow: 'Southbound flow into grid row 0' },
@@ -260,7 +261,6 @@ function generateWaveformData(type, amp = 8, period = 20, baseline = 4, totalSte
 }
 
 export default function DocsPage() {
-  const navigate = useNavigate();
   // Links such as /docs#traffic-data open at that section.
   useEffect(() => {
     const id = window.location.hash.slice(1);
@@ -276,11 +276,6 @@ export default function DocsPage() {
   const [demoQueues, setDemoQueues] = useState({ N: 5, S: 4, E: 8, W: 7 });
   const [demoServed, setDemoServed] = useState(0);
   const [demoCycleStep, setDemoCycleStep] = useState(0);
-
-  const handleLogout = () => {
-    api.logout();
-    navigate('/');
-  };
 
   // Waveform data for interactive graph
   const waveform = generateWaveformData(activeTab, amp, period, baseline, 40);
@@ -341,30 +336,10 @@ export default function DocsPage() {
   };
 
   return (
+    <>
+    <SiteHeader />
     <div className={styles.docsContainer}>
-      {/* Top Header */}
       <header className={styles.header}>
-        <div className={styles.headerTop}>
-          <div className={styles.headerTitle}>
-            <Logo size="medium" subtitle="Technical Architecture, 8 Signal Phases (LHD), & Benchmark Framework" />
-          </div>
-
-          <div className={styles.toolbar}>
-            <Link to="/" className={styles.toolbarBtn}>Home</Link>
-            <Link to="/demo" className={styles.toolbarBtn}>Interactive Demos</Link>
-            <Link to="/simulator" className={styles.toolbarBtn}>Simulator</Link>
-            <Link to="/saved-simulations" className={styles.toolbarBtn}>Saved Archives</Link>
-            <Link to="/docs" className={`${styles.toolbarBtn} ${styles.toolbarBtnActive}`}>Docs</Link>
-            <Link to="/contact" className={styles.toolbarBtn}>Contact</Link>
-            {api.isAuthenticated() && (
-              <button onClick={handleLogout} className={`${styles.toolbarBtn} ${styles.toolbarBtnDanger}`}>
-                Log Out
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Quick-Nav Sticky Pills */}
         <div className={styles.quickNav}>
           <a href="#section-overview" className={styles.navPill}>1. Architecture</a>
           <a href="#section-intersection" className={styles.navPill}>2. Direction Blueprint</a>
@@ -810,5 +785,6 @@ export default function DocsPage() {
       {/* SECTION 8: Feeding sources from a data file */}
       <TrafficDataDocs docStyles={styles} />
     </div>
+    </>
   );
 }

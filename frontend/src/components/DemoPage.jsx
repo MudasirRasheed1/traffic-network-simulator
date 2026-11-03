@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useCityStore } from '../store/useCityStore.js';
+import { deriveCity } from '../network/cityModel.js';
 import Logo from './Logo.jsx';
 import GridVisualization from './GridVisualization.jsx';
 import StatsDashboard from './StatsDashboard.jsx';
@@ -9,6 +11,8 @@ import {
   makeDefaultFunctionConfig
 } from '../simulation/arrivalProfile.js';
 import styles from './DemoPage.module.css';
+import SiteHeader from './common/SiteHeader.jsx';
+import { HEADINGS, InflowChart, PhaseTimeline } from './demo/DemoWidgets.jsx';
 
 const DEMO_SCENARIOS = [
   {
@@ -266,27 +270,134 @@ const DEMO_SCENARIOS = [
   }
 ];
 
+// ---------------------------------------------------------------
+// Start here: four short stages
+// ---------------------------------------------------------------
+
+// What each Watch run shows, in a few words.
+const FEATURES = {
+  asymmetric_surge: {
+    title: 'Adapts to live queues',
+    short: 'One busy road, three quiet ones.',
+    run: 'Heavy traffic comes from the north only. Greedy keeps the busy road green; Fixed keeps cycling through empty roads.',
+  },
+  waveform_oscillation: {
+    title: 'Traffic that changes over time',
+    short: 'Inflow rises and falls like a wave.',
+    run: 'Traffic on every side follows the wave in the chart. Greedy gives more green at the peaks, less in the dips.',
+  },
+  stochastic_bursts: {
+    title: 'Random traffic',
+    short: 'Arrivals drawn from a probability distribution.',
+    run: 'Cars arrive at random each step (Normal distribution, mean 4). The chart shows the bursts Greedy has to absorb.',
+  },
+  real_world_kinematics: {
+    title: 'A fully configurable network',
+    short: 'Road length, speed, turns and inflow per road.',
+    run: 'Longer, faster roads, a different turn mix and uneven inflow. Every one of these settings can be changed.',
+    showParams: true,
+  },
+};
+
+const PRACTICE_STEPS = 150;
+
+function configurePractice(store, flows, active) {
+  const rate = (key) => (active.has(key) ? flows[key] : 0);
+  store.updateConfig({
+    gridSize: 3,
+    simDuration: PRACTICE_STEPS,
+    seed: 2,
+    fixedCycleInterval: 5,
+    greedyDecisionInterval: 5,
+    defaultRoadLength: 12,
+    defaultRoadSpeed: 2,
+    defaultTurnProbT: 0.7,
+    defaultTurnProbR: 0.15,
+    defaultTurnProbL: 0.15,
+    defaultBoundaryInflowProfiles: Object.fromEntries(HEADINGS.map((h) => [h.side, makeConstantInflowProfile(rate(h.key))])),
+  });
+}
+
+function PracticePanel({ flows, active, onToggle, onFlow }) {
+  return (
+    <div className={styles.practicePanel}>
+      <div className={styles.practiceDirections}>
+        <span className={styles.practiceLabel}>Traffic direction</span>
+        <div className={styles.directionButtons}>
+          {HEADINGS.map((h) => (
+            <button
+              key={h.key}
+              type="button"
+              className={active.has(h.key) ? styles.directionOn : ''}
+              style={{ '--c': h.color }}
+              onClick={() => onToggle(h.key)}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className={styles.practiceControls}>
+        {HEADINGS.filter((h) => active.has(h.key)).map((h) => (
+          <label key={h.key}>
+            <span>{h.label}: <strong>{flows[h.key]}</strong> cars per step on each road</span>
+            <input type="range" min="1" max="8" value={flows[h.key]} style={{ accentColor: h.color }} onChange={(e) => onFlow(h.key, Number(e.target.value))} />
+          </label>
+        ))}
+        {!active.size && <p className={styles.practiceHint}>Pick at least one direction.</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function DemoPage() {
+  const navigate = useNavigate();
+  const loadCity = useCityStore((s) => s.loadCity);
   const [selectedScenarioIdx, setSelectedScenarioIdx] = useState(null);
+  const [practice, setPractice] = useState(false);
+  const [flows, setFlows] = useState({ south: 3, north: 3, west: 3, east: 3 });
+  const [active, setActive] = useState(() => new Set(['south']));
+  const [cell, setCell] = useState([1, 1]);
+  const [cityError, setCityError] = useState('');
 
   const isRunning = useSimStore((s) => s.isRunning);
   const isPaused = useSimStore((s) => s.isPaused);
   const speed = useSimStore((s) => s.speed);
   const snapshot = useSimStore((s) => s.snapshot);
+  const engine = useSimStore((s) => s.engine);
   const setSpeed = useSimStore((s) => s.setSpeed);
   const startSimulation = useSimStore((s) => s.startSimulation);
   const pauseSimulation = useSimStore((s) => s.pauseSimulation);
   const resumeSimulation = useSimStore((s) => s.resumeSimulation);
-  const resetSimulation = useSimStore((s) => s.resetSimulation);
   const initSimulation = useSimStore((s) => s.initSimulation);
   const stepOnce = useSimStore((s) => s.stepOnce);
   const stepBackOnce = useSimStore((s) => s.stepBackOnce);
 
+  // Opening Start here again (for example from the header) shows the
+  // four stages, not the run that was open.
+  const location = useLocation();
+  useEffect(() => {
+    setSelectedScenarioIdx(null);
+    setPractice(false);
+  }, [location.key]);
+
+  // The phase each policy chose at every intersection, step by step.
+  const historyRef = useRef([]);
+  useEffect(() => {
+    const h = historyRef.current;
+    if (!snapshot) { h.length = 0; return; }
+    if (snapshot.time === 0 || snapshot.time < h.length - 1) h.length = 0;
+    const phases = (pol) => snapshot[pol].grid.map((row) => row.map((i) => i.currentPhase));
+    h[snapshot.time] = { fixed: phases('fixed'), greedy: phases('greedy') };
+  }, [snapshot]);
+
   const handleSelectScenario = (idx) => {
     setSelectedScenarioIdx(idx);
+    setPractice(false);
     const sc = DEMO_SCENARIOS[idx];
     const store = useSimStore.getState();
     sc.configurator(store);
+    store.resetSimulation();
     store.initSimulation();
     store.startSimulation();
   };
@@ -294,213 +405,185 @@ export default function DemoPage() {
   const handleBackToCards = () => {
     useSimStore.getState().resetSimulation();
     setSelectedScenarioIdx(null);
+    setPractice(false);
+  };
+
+  const runPractice = (nextFlows, nextActive) => {
+    const store = useSimStore.getState();
+    configurePractice(store, nextFlows, nextActive);
+    store.resetSimulation();
+    store.setSpeed(25);
+    if (!nextActive.size) return;
+    store.initSimulation();
+    store.startSimulation();
+  };
+  const startPractice = () => {
+    setPractice(true);
+    setSelectedScenarioIdx(null);
+    runPractice(flows, active);
+  };
+  const toggleDirection = (key) => {
+    const next = new Set(active);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setActive(next);
+    runPractice(flows, next);
+  };
+  const changeFlow = (key, value) => {
+    const next = { ...flows, [key]: value };
+    setFlows(next);
+    runPractice(next, active);
+  };
+
+  // Real city: a sample network loaded into the City Simulator.
+  const openRealCity = async () => {
+    setCityError('');
+    try {
+      const sample = await (await fetch('/samples/chandigarh-sector17.json')).json();
+      loadCity(deriveCity(sample.base), sample.meta);
+      navigate('/city-sim');
+    } catch {
+      setCityError('The sample city could not be loaded. Try again.');
+    }
   };
 
   const activeScenario = selectedScenarioIdx !== null ? DEMO_SCENARIOS[selectedScenarioIdx] : null;
+  const feature = activeScenario ? FEATURES[activeScenario.id] : null;
+  const inSimulation = activeScenario || practice;
+  const stages = [
+    { n: 1, title: 'Watch', text: 'Get to know the simulator and its main features.', action: () => document.getElementById('watch')?.scrollIntoView({ behavior: 'smooth' }) },
+    { n: 2, title: 'Practice', text: 'Make yourself familiar with the controls.', action: startPractice },
+    { n: 3, title: 'Explore', text: 'Build your own grid.', action: () => navigate('/simulator') },
+    { n: 4, title: 'Real city', text: 'Run it on a real city.', action: openRealCity },
+  ];
 
   return (
     <div className={styles.pageWrapper}>
-      {/* Header */}
-      <header className={styles.header}>
-        <div className={styles.headerLeft}>
-          <div className={styles.navRow}>
-            <Link to="/" className={styles.backBtn} title="Return to Home">
-              <svg className={styles.backIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
-              </svg>
-              <span>Back to Home</span>
-            </Link>
-            <span className={styles.breadcrumbSep}>/</span>
-            <span className={styles.breadcrumbCurrent}>Interactive Demos</span>
-          </div>
-          <Link to="/" className={styles.logoLink}>
-            <Logo size="medium" subtitle="Interactive Pre-Configured Benchmark Scenarios" />
-          </Link>
-        </div>
+      <SiteHeader />
 
-        <nav className={styles.toolbar}>
-          <Link to="/" className={styles.toolbarBtn}>Home</Link>
-          <Link to="/docs" className={styles.toolbarBtn}>Documentation</Link>
-          <Link to="/contact" className={styles.toolbarBtn}>Contact Us</Link>
-          <Link to="/#auth-section" className={styles.primaryToolbarBtn}>Sign In / Access</Link>
-        </nav>
-      </header>
-
-      {/* Main Container */}
       <main className={styles.mainContainer}>
-        {/* STAGE 1: 4 Large Visual Cards Overview */}
-        {selectedScenarioIdx === null ? (
+        {!inSimulation ? (
           <div className={styles.overviewSection}>
             <div className={styles.introHero}>
-              <div className={styles.badgeLabel}>PLATFORM BENCHMARKS</div>
-              <h1>Select a Live Simulation Scenario</h1>
-              <p>
-                Click any card to launch the actual multi-intersection simulation engine and inspect live comparative performance graphs.
-              </p>
+              <h1>Start here</h1>
+              <p>Four short steps from watching to your own city.</p>
             </div>
 
-            <div className={styles.cardsGrid}>
+            <div className={styles.stageGrid}>
+              {stages.map((st) => (
+                <button key={st.n} type="button" className={styles.stageCard} onClick={st.action}>
+                  <span className={styles.stageNum}>{st.n}</span>
+                  <strong>{st.title}</strong>
+                  <span>{st.text}</span>
+                </button>
+              ))}
+            </div>
+            {cityError && <p className={styles.stageError}>{cityError}</p>}
+
+            <div>
+              <h2 id="watch" className={styles.stageHeading}>1. Watch</h2>
+              <p className={styles.stageLead}>What we built, in four short live runs. Each compares a fixed signal cycle with our Greedy policy.</p>
+            </div>
+            <div className={styles.featureGrid}>
               {DEMO_SCENARIOS.map((sc, idx) => (
-                <div
-                  key={sc.id}
-                  className={styles.scenarioCard}
-                  onClick={() => handleSelectScenario(idx)}
-                >
-                  {/* Artwork Illustration Banner */}
-                  <div className={styles.artworkContainer}>
-                    {sc.renderArtwork()}
+                <button key={sc.id} type="button" className={styles.featureCard} onClick={() => handleSelectScenario(idx)}>
+                  <div className={styles.featureArt}>{sc.renderArtwork()}</div>
+                  <div className={styles.featureBody}>
+                    <span className={styles.featureNum}>Feature {sc.num}</span>
+                    <strong>{FEATURES[sc.id].title}</strong>
+                    <span>{FEATURES[sc.id].short}</span>
+                    <span className={styles.featureRun}>Run it</span>
                   </div>
-
-                  <div className={styles.cardContent}>
-                    <div className={styles.cardHeader}>
-                      <span className={styles.cardIndex}>Scenario {sc.num}</span>
-                      <span
-                        className={styles.cardBadge}
-                        style={{ color: sc.badgeColor, borderColor: `${sc.badgeColor}55`, background: `${sc.badgeColor}15` }}
-                      >
-                        {sc.badge}
-                      </span>
-                    </div>
-
-                    <h2 className={styles.cardTitle}>{sc.title}</h2>
-
-                    <div className={styles.scenarioSection}>
-                      <span className={styles.sectionLabel}>TRAFFIC SCENARIO:</span>
-                      <p className={styles.scenarioText}>{sc.scenarioDescription}</p>
-                    </div>
-
-                    <div className={styles.benefitSection}>
-                      <span className={styles.benefitLabel}>SIMULATION MODEL BENEFIT:</span>
-                      <p className={styles.benefitText}>{sc.modelBenefit}</p>
-                    </div>
-
-                    <div className={styles.cardFooter}>
-                      <span className={styles.metricPill}>{sc.metric}</span>
-                      <button className={styles.launchBtn}>
-                        <span>Run Live Demo</span>
-                        <svg className={styles.launchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                          <polyline points="12 5 19 12 12 19"></polyline>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
         ) : (
-          /* STAGE 2: Live Full Simulation Run with Grid and Graphs */
           <div className={styles.simulationSection}>
-            {/* Top Control Bar */}
             <div className={styles.simTopBar}>
               <button className={styles.backToCardsBtn} onClick={handleBackToCards}>
                 <svg className={styles.backIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
-                <span>Back to All Scenarios</span>
+                <span>Back to Start here</span>
               </button>
 
               <div className={styles.activeScenarioInfo}>
-                <span
-                  className={styles.cardBadge}
-                  style={{ color: activeScenario.badgeColor, borderColor: `${activeScenario.badgeColor}55`, background: `${activeScenario.badgeColor}15` }}
-                >
-                  {activeScenario.badge}
-                </span>
                 <span className={styles.scenarioHeading}>
-                  Scenario {activeScenario.num}: <strong>{activeScenario.title}</strong>
+                  {activeScenario ? <>Feature {activeScenario.num}: <strong>{feature.title}</strong></> : <strong>2. Practice</strong>}
                 </span>
               </div>
 
-              {/* Simulation Player Controls */}
               <div className={styles.simControlsGroup}>
                 {isRunning ? (
-                  <button className={`${styles.btn} ${styles.btnPause}`} onClick={pauseSimulation}>
-                    Stop
-                  </button>
+                  <button className={`${styles.btn} ${styles.btnPause}`} onClick={pauseSimulation}>Stop</button>
                 ) : isPaused ? (
                   <>
-                    <button className={`${styles.btn} ${styles.btnResume}`} onClick={resumeSimulation}>
-                      Resume
-                    </button>
-                    <button className={`${styles.btn} ${styles.btnStep}`} onClick={stepBackOnce} disabled={!snapshot || snapshot.time <= 0}>
-                      Prev Step
-                    </button>
-                    <button className={`${styles.btn} ${styles.btnStep}`} onClick={stepOnce}>
-                      Next Step
-                    </button>
+                    <button className={`${styles.btn} ${styles.btnResume}`} onClick={resumeSimulation}>Resume</button>
+                    <button className={`${styles.btn} ${styles.btnStep}`} onClick={stepBackOnce} disabled={!snapshot || snapshot.time <= 0}>Prev Step</button>
+                    <button className={`${styles.btn} ${styles.btnStep}`} onClick={stepOnce}>Next Step</button>
                   </>
                 ) : (
-                  <button className={`${styles.btn} ${styles.btnStart}`} onClick={() => {
-                    initSimulation();
-                    startSimulation();
-                  }}>
+                  <button className={`${styles.btn} ${styles.btnStart}`} onClick={() => { initSimulation(); startSimulation(); }} disabled={practice && !active.size}>
                     Start Simulation
                   </button>
                 )}
-
-                <button className={`${styles.btn} ${styles.btnReset}`} onClick={() => {
-                  const store = useSimStore.getState();
-                  activeScenario.configurator(store);
-                  store.resetSimulation();
-                  store.initSimulation();
-                  store.startSimulation();
-                }}>
+                <button className={`${styles.btn} ${styles.btnReset}`} onClick={() => (practice ? runPractice(flows, active) : handleSelectScenario(selectedScenarioIdx))}>
                   Reset
                 </button>
-
                 <div className={styles.speedControl}>
                   <label>Speed:</label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="60"
-                    value={speed}
-                    onChange={(e) => setSpeed(parseInt(e.target.value, 10))}
-                  />
+                  <input type="range" min="1" max="60" value={speed} onChange={(e) => setSpeed(parseInt(e.target.value, 10))} />
                   <span>{speed} steps/s</span>
                 </div>
               </div>
             </div>
 
-            {/* Minimal Scenario Parameters Bar */}
-            <div className={styles.activeParamsSummaryBar}>
-              <span className={styles.paramsBarLabel}>CONFIG:</span>
-              <div className={styles.paramsPillsList}>
-                {activeScenario.parameters.map((param, pIdx) => (
-                  <span key={pIdx} className={styles.paramPill}>
-                    <strong className={styles.paramKey}>{param.label}:</strong> {param.value}
-                  </span>
-                ))}
-              </div>
-            </div>
+            <p className={styles.runLine}>
+              {activeScenario ? feature.run : 'Choose where traffic comes from and how much. Then watch how each policy switches its lights.'}
+            </p>
 
-            {/* Actual Full Grid Visualization */}
+            {practice && (
+              <PracticePanel flows={flows} active={active} onToggle={toggleDirection} onFlow={changeFlow} />
+            )}
+
+            {feature?.showParams && (
+              <div className={styles.activeParamsSummaryBar}>
+                <div className={styles.paramsPillsList}>
+                  {activeScenario.parameters.map((param, pIdx) => (
+                    <span key={pIdx} className={styles.paramPill}>
+                      <strong className={styles.paramKey}>{param.label}:</strong> {param.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <InflowChart engine={engine} time={snapshot?.time ?? 0} />
+
             <div className={styles.visualizationContainer}>
               <GridVisualization />
             </div>
 
-            {/* Actual Live Graphs & Analytics Dashboard */}
+            {practice && snapshot && (
+              <PhaseTimeline history={historyRef.current} gridSize={3} steps={PRACTICE_STEPS} cell={cell} onCell={setCell} />
+            )}
+
             <div className={styles.dashboardContainer}>
               <StatsDashboard />
             </div>
 
-            {/* Bottom Call to Action */}
             <div className={styles.ctaBox}>
               <div className={styles.ctaInfo}>
-                <h3>Ready to build custom topologies and export data?</h3>
-                <p>Sign in to configure N x N topologies, import real OpenStreetMap maps, and save benchmark runs to PostgreSQL.</p>
+                <h3>{practice ? 'Next: build your own grid' : 'Next: try it yourself'}</h3>
               </div>
-              <Link to="/#auth-section" className={styles.ctaButton}>
-                Sign In to Build Custom Runs
-              </Link>
+              {practice
+                ? <Link to="/simulator" className={styles.ctaButton}>Open the Grid Simulator</Link>
+                : <button type="button" className={styles.ctaButton} onClick={startPractice}>Go to Practice</button>}
             </div>
           </div>
         )}
       </main>
 
-      {/* Footer */}
       <footer className={styles.footer}>
         <div className={styles.footerLinks}>
           <Link to="/" className={styles.footerLink}>Home</Link>

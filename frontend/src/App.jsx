@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useSimStore } from './store/useSimStore.js';
 import { api } from './utils/api.js';
 import ConfigPanel from './components/ConfigPanel.jsx';
@@ -13,9 +13,10 @@ import Logo from './components/Logo.jsx';
 import GridExperimentSection from './components/experiments/GridExperimentSection.jsx';
 import { FEATURES } from './features.js';
 import styles from './App.module.css';
+import SiteHeader from './components/common/SiteHeader.jsx';
+import PageIntro from './components/common/PageIntro.jsx';
 
 export default function App() {
-  const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [isCurrentRunSaved, setIsCurrentRunSaved] = useState(false);
@@ -38,18 +39,11 @@ export default function App() {
 
   const simActive = isRunning || isPaused;
 
+  // Open to everyone; saving runs needs an account.
+  const signedIn = api.isAuthenticated();
   useEffect(() => {
-    if (!api.isAuthenticated()) {
-      navigate('/');
-    } else {
-      setAuthChecked(true);
-    }
-  }, [navigate]);
-
-  const handleLogout = () => {
-    api.logout();
-    navigate('/');
-  };
+    setAuthChecked(true);
+  }, []);
 
   const handleStart = () => {
     setIsCurrentRunSaved(false);
@@ -80,64 +74,13 @@ export default function App() {
   }
 
   return (
+    <>
+    <SiteHeader />
     <div className={styles.app}>
-      <header className={styles.header}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '16px' }}>
-          <Link to="/demo" className={styles.logoLink} title="Back to Interactive Demos">
-            <Logo size="medium" subtitle="Greedy Lookahead Controller vs Fixed Cycle Benchmark" />
-          </Link>
-          
-          <div className={styles.toolbar}>
-            <div className={styles.researcherBadge}>
-              <span>Researcher:</span>
-              <strong>{api.username}</strong>
-            </div>
-            <Link 
-              to="/simulator" 
-              className={`${styles.toolbarBtn} ${styles.toolbarBtnActive}`}
-            >
-              Simulator
-            </Link>
-            <Link 
-              to="/city-sim" 
-              className={styles.toolbarBtn}
-            >
-              City Simulator
-            </Link>
-            <Link 
-              to="/network" 
-              className={styles.toolbarBtn}
-            >
-              Network Explorer
-            </Link>
-            <Link 
-              to="/saved-simulations" 
-              className={styles.toolbarBtn}
-            >
-              Saved Archives
-            </Link>
-            <Link 
-              to="/docs" 
-              className={styles.toolbarBtn}
-            >
-              Docs
-            </Link>
-            <Link 
-              to="/contact" 
-              className={styles.toolbarBtn}
-            >
-              Contact
-            </Link>
-            <button 
-              onClick={handleLogout}
-              className={`${styles.toolbarBtn} ${styles.toolbarBtnDanger}`}
-            >
-              Log Out
-            </button>
-          </div>
-        </div>
-      </header>
-      
+      <PageIntro id="grid">
+        <strong>Build your own grid.</strong> Set its size, roads and traffic in Configure Parameters, then press Start Simulation to compare Fixed and Greedy side by side.
+      </PageIntro>
+
       <div className={styles.paramsToggleBar} onClick={() => setShowParams(!showParams)}>
         <span>Simulation Parameters & City Import Configuration</span>
         <button className={styles.toggleBtn}>
@@ -199,7 +142,12 @@ export default function App() {
           )}
           
           {/* Save Run button: Remains visible when paused, running, OR when simulation finishes */}
-          {snapshot && snapshot.time > 0 && (
+          {snapshot && snapshot.time > 0 && !signedIn && (
+            <Link to="/#auth-section" className={`${styles.btn} ${styles.btnStep}`} style={{ textDecoration: 'none' }}>
+              Sign in to save
+            </Link>
+          )}
+          {snapshot && snapshot.time > 0 && signedIn && (
             isCurrentRunSaved ? (
               <button 
                 className={`${styles.btn} ${styles.btnSaved}`} 
@@ -276,5 +224,6 @@ export default function App() {
         />
       )}
     </div>
+    </>
   );
 }

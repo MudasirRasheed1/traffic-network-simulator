@@ -33,6 +33,7 @@ const savedDetail = () => {
   }
 };
 import styles from './NetworkExplorer.module.css';
+import SiteHeader from '../common/SiteHeader.jsx';
 
 const DEFAULT_CENTER = [30.7398, 76.7827];
 const AREA_PRESETS_KM = [1, 2, 3];
@@ -358,16 +359,7 @@ export default function NetworkExplorerPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.topbar}>
-        <Logo size="small" subtitle="City Network Explorer" />
-        <nav className={styles.nav}>
-          <Link to="/simulator">Grid Simulator</Link>
-          <Link to="/city-sim">City Simulator</Link>
-          <Link to="/network" className={styles.navActive}>Network Explorer</Link>
-          <Link to="/saved-simulations">Saved Archives</Link>
-          <Link to="/docs">Docs</Link>
-        </nav>
-      </header>
+      <SiteHeader />
 
       <div className={styles.body} style={panels.isOpen('sidebar') ? undefined : { gridTemplateColumns: '40px 1fr' }}>
         <CollapsibleSidebar panels={panels} className={styles.sidebar} label="Panels">

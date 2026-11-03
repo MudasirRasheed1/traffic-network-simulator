@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../utils/api.js';
 import { useSimStore } from '../store/useSimStore.js';
 import styles from './SavedSimulationsPage.module.css';
+import SiteHeader from './common/SiteHeader.jsx';
 
 function formatMetricValue(val) {
   if (Array.isArray(val)) {
@@ -47,11 +48,6 @@ export default function SavedSimulationsPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleLogout = () => {
-    api.logout();
-    navigate('/');
   };
 
   const handleDelete = async (id, name) => {
@@ -182,46 +178,13 @@ export default function SavedSimulationsPage() {
   const totalSaved = simulations.length;
 
   return (
+    <>
+    <SiteHeader />
     <div className={styles.pageWrapper}>
-      {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <div className={styles.navRow}>
-            <Link to="/simulator" className={styles.backBtn} title="Return to Live Simulator">
-              <svg className={styles.backIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
-              </svg>
-              <span>Back to Simulator</span>
-            </Link>
-            <span className={styles.breadcrumbSep}>/</span>
-            <span className={styles.breadcrumbCurrent}>Saved Archives</span>
-          </div>
-          <h1>Simulation Run Archives</h1>
-          <p>
-            Persisted traffic experiments, benchmark comparisons, and scenario configurations stored in PostgreSQL.
-          </p>
-        </div>
-
-        <div className={styles.toolbar}>
-          <div className={styles.researcherBadge}>
-            <span>Researcher:</span>
-            <strong>{api.username}</strong>
-          </div>
-          <Link to="/simulator" className={styles.toolbarBtn}>
-            Simulator
-          </Link>
-          <Link to="/saved-simulations" className={`${styles.toolbarBtn} ${styles.toolbarBtnActive}`}>
-            Saved Archives
-          </Link>
-          <Link to="/docs" className={styles.toolbarBtn}>
-            Docs
-          </Link>
-          <Link to="/contact" className={styles.toolbarBtn}>
-            Contact
-          </Link>
-          <button onClick={handleLogout} className={`${styles.toolbarBtn} ${styles.toolbarBtnDanger}`}>
-            Log Out
-          </button>
+          <h1>Saved runs</h1>
+          <p>Your saved simulations. Replay, export or delete them.</p>
         </div>
       </header>
 
@@ -449,5 +412,6 @@ export default function SavedSimulationsPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

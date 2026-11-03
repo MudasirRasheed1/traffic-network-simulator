@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from './Logo.jsx';
 import styles from './ContactPage.module.css';
+import SiteHeader from './common/SiteHeader.jsx';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -40,32 +41,7 @@ export default function ContactPage() {
 
   return (
     <div className={styles.pageWrapper}>
-      {/* Generic Unified Header for All Users */}
-      <header className={styles.header}>
-        <div className={styles.headerLeft}>
-          <Link to="/" className={styles.logoLink} title="Return to Home">
-            <Logo size="medium" subtitle="Research Inquiries, Collaboration, and Technical Support" />
-          </Link>
-        </div>
-
-        <nav className={styles.toolbar}>
-          <Link to="/" className={styles.toolbarBtn}>
-            Home
-          </Link>
-          <Link to="/simulator" className={styles.toolbarBtn}>
-            Simulator
-          </Link>
-          <Link to="/saved-simulations" className={styles.toolbarBtn}>
-            Saved Archives
-          </Link>
-          <Link to="/docs" className={styles.toolbarBtn}>
-            Docs
-          </Link>
-          <Link to="/contact" className={`${styles.toolbarBtn} ${styles.toolbarBtnActive}`}>
-            Contact
-          </Link>
-        </nav>
-      </header>
+      <SiteHeader />
 
       {/* Main Container */}
       <main className={styles.mainContainer}>

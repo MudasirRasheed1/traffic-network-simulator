@@ -1,0 +1,91 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 58px;
+  padding: 0 24px;
+  background: rgba(11, 15, 25, 0.92);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  backdrop-filter: blur(10px);
+  box-sizing: border-box;
+}
+
+.logo { flex: none; text-decoration: none; display: flex; align-items: center; margin-right: auto; }
+
+/* Every item on the right: same height, size and spacing. */
+.nav,
+.account { display: flex; align-items: center; gap: 4px; }
+
+.nav {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav::-webkit-scrollbar { display: none; }
+
+.nav a,
+.account a,
+.ghost,
+.primary {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.nav a,
+.account a,
+.ghost { color: #94a3b8; background: transparent; border: none; }
+.nav a:hover,
+.account a:hover,
+.ghost:hover { color: #f8fafc; background: rgba(148, 163, 184, 0.1); }
+
+/* The current page: brighter text and a thin line under it. */
+.nav a.active,
+.account a.active { color: #f8fafc; }
+.nav a.active::after,
+.account a.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 2px;
+  background: #38bdf8;
+}
+
+.account { padding-left: 12px; margin-left: 4px; border-left: 1px solid rgba(148, 163, 184, 0.2); }
+
+.user {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.ghost:hover { color: #fca5a5; }
+.primary { margin-left: 4px; padding: 0 16px; border: none; background: #0284c7; color: #fff; }
+.primary:hover { background: #0ea5e9; }
+
+@media (max-width: 760px) {
+  .header { gap: 8px; padding: 0 12px; }
+  .user { display: none; }
+  .account { padding-left: 6px; }
+}

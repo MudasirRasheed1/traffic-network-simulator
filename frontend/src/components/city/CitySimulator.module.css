@@ -642,3 +642,7 @@
   margin: 0 0 14px;
 }
 .resultsTitle i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* The line at the top of the map area */
+.cityIntro { padding: 10px 12px 0; }
+.cityIntro > div { margin-bottom: 0; }

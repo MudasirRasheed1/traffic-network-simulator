@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../utils/api.js';
 import styles from './LandingPage.module.css';
 import Logo from './Logo';
+import SiteHeader from './common/SiteHeader.jsx';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -233,28 +234,7 @@ export default function LandingPage() {
       {/* Grid Overlay background */}
       <div className={styles.gridOverlay}></div>
 
-      {/* Header */}
-      <header className={styles.header}>
-        <div className={styles.logoArea}>
-          <Logo size="medium" />
-        </div>
-        <div className={styles.headerNav}>
-          <Link to="/demo" className={styles.demoNavBtn}>
-            Interactive Demos
-          </Link>
-          <Link to="/docs" className={styles.navLink}>Documentation</Link>
-          <Link to="/contact" className={styles.navLink}>Contact Us</Link>
-          <button 
-            className={styles.primaryNavBtn}
-            onClick={() => {
-              const el = document.getElementById('auth-section');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            Access Simulator
-          </button>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Hero Content Section */}
       <main className={styles.heroSection}>
@@ -276,7 +256,7 @@ export default function LandingPage() {
 
           <div className={styles.heroCtaRow}>
             <Link to="/demo" className={styles.liveDemoHeroBtn}>
-              <span>Explore Interactive Demos (Zero Login)</span>
+              <span>Start here (no sign in)</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={styles.ctaArrowIcon}>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
                 <polyline points="12 5 19 12 12 19"></polyline>
@@ -409,7 +389,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className={styles.footer}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
-          <Link to="/demo" style={{ color: '#38bdf8', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Interactive Demos</Link>
+          <Link to="/demo" style={{ color: '#38bdf8', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Start here</Link>
           <span style={{ color: '#334155' }}>•</span>
           <Link to="/docs" style={{ color: '#38bdf8', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Documentation</Link>
           <span style={{ color: '#334155' }}>•</span>

@@ -1,0 +1,43 @@
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.7);
+  color: #cbd5e1;
+  font-size: 0.82rem;
+}
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.head strong { color: #f8fafc; font-size: 0.9rem; }
+
+.keys, .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: #94a3b8; font-size: 0.78rem; }
+.keys span, .legend span { display: inline-flex; align-items: center; gap: 6px; }
+.keys i { width: 14px; height: 3px; border-radius: 2px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; }
+
+.chart { width: 100%; height: 90px; background: #0b0f19; border-radius: 8px; }
+.now { stroke: #f8fafc; stroke-width: 1; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; opacity: 0.7; }
+.axis { display: flex; justify-content: space-between; color: #64748b; font-size: 0.72rem; }
+
+.row { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 10px; }
+.rowLabel { color: #cbd5e1; font-size: 0.8rem; white-space: nowrap; }
+.track { width: 100%; height: 22px; background: #0b0f19; border-radius: 6px; }
+
+.picker { display: inline-flex; align-items: center; gap: 8px; color: #94a3b8; font-size: 0.78rem; }
+.cells { display: grid; gap: 3px; }
+.cells button {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border-radius: 3px;
+  border: 1px solid #475569;
+  background: transparent;
+  cursor: pointer;
+}
+.cells button:hover { border-color: #38bdf8; }
+.cells .cellOn { background: #38bdf8; border-color: #38bdf8; }
+
+@media (max-width: 600px) { .row { grid-template-columns: 1fr; gap: 4px; } }

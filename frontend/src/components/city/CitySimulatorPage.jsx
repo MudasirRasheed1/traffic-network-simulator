@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../../utils/api.js';
 import Logo from '../Logo.jsx';
 import NetworkMap from '../network/NetworkMap.jsx';
@@ -7,7 +7,7 @@ import { buildCityScene, cityLegend, CONGESTION } from '../network/scenes.js';
 import { useCityStore } from '../../store/useCityStore.js';
 import { DEFAULT_CITY_SIM_CONFIG, inflowFor, sourceGateways } from '../../simulation/cityNetwork.js';
 import { isDataProfile } from '../../simulation/dataInflow.js';
-import { addNode, connectNodes, moveNode, splitRoadAt } from '../../network/cityModel.js';
+import { addNode, connectNodes, deriveCity, moveNode, splitRoadAt } from '../../network/cityModel.js';
 import { makeConstantInflowProfile } from '../../simulation/arrivalProfile.js';
 import CityEditPanel from './CityEditPanel.jsx';
 import CityStatsDashboard from './CityStatsDashboard.jsx';
@@ -18,6 +18,8 @@ import { CollapsiblePanel, CollapsibleSidebar, usePanels } from '../common/Colla
 import { MAP_STYLES, useMapStyle } from '../network/useMapStyle.js';
 import nx from '../network/NetworkExplorer.module.css';
 import styles from './CitySimulator.module.css';
+import SiteHeader from '../common/SiteHeader.jsx';
+import PageIntro from '../common/PageIntro.jsx';
 
 // Same colours as the analytics dashboard (grid simulator convention).
 const POLICY_COLORS = { fixed: '#f59e0b', greedy: '#22c55e' };
@@ -107,7 +109,6 @@ const savedLayout = () => {
 };
 
 export default function CitySimulatorPage() {
-  const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
   const [selection, setSelection] = useState(null);
   const [liveView, setLiveView] = useState('greedy');
@@ -204,10 +205,21 @@ export default function CitySimulatorPage() {
       : tool === 'move' ? `Click the new position for ${toolNode}. Esc cancels.`
         : 'Click the map, or a road to place it on that road. Esc cancels.';
 
+  // Open to everyone; the Network Explorer and saved runs need an account.
+  const signedIn = api.isAuthenticated();
   useEffect(() => {
-    if (!api.isAuthenticated()) navigate('/');
-    else setAuthChecked(true);
-  }, [navigate]);
+    setAuthChecked(true);
+  }, []);
+  const [sampleError, setSampleError] = useState('');
+  const loadSample = async () => {
+    setSampleError('');
+    try {
+      const sample = await (await fetch('/samples/chandigarh-sector17.json')).json();
+      useCityStore.getState().loadCity(deriveCity(sample.base), sample.meta);
+    } catch {
+      setSampleError('The sample city could not be loaded. Try again.');
+    }
+  };
 
   const totalSteps = Math.max(1, config.simDuration);
   const sideDefault = config.defaultBoundaryInflowProfiles?.N;
@@ -273,16 +285,7 @@ export default function CitySimulatorPage() {
   if (!authChecked) return null;
 
   const header = (
-    <header className={nx.topbar}>
-      <Logo size="small" subtitle="City Simulator" />
-      <nav className={nx.nav}>
-        <Link to="/simulator">Grid Simulator</Link>
-        <Link to="/city-sim" className={nx.navActive}>City Simulator</Link>
-        <Link to="/network">Network Explorer</Link>
-        <Link to="/saved-simulations">Saved Archives</Link>
-        <Link to="/docs">Docs</Link>
-      </nav>
-    </header>
+    <SiteHeader />
   );
 
   if (!city) {
@@ -291,8 +294,10 @@ export default function CitySimulatorPage() {
         {header}
         <div className={styles.emptyState}>
           <h2>No city network loaded</h2>
-          <p>Extract a city graph in the Network Explorer, then open it here.</p>
-          <Link to="/network" className={nx.primaryBtn}>Open the Network Explorer</Link>
+          <p>Start with the sample city{signedIn ? ', or extract your own in the Network Explorer' : ''}.</p>
+          <button type="button" className={nx.primaryBtn} onClick={loadSample}>Load sample city</button>
+          {signedIn && <Link to="/network" className={nx.secondaryBtn}>Open the Network Explorer</Link>}
+          {sampleError && <p className={nx.errorText}>{sampleError}</p>}
         </div>
       </div>
     );
@@ -480,6 +485,12 @@ export default function CitySimulatorPage() {
         </CollapsibleSidebar>
 
         <main className={styles.mapArea}>
+          <div className={styles.cityIntro}>
+            <PageIntro id="city">
+              You are looking at <strong>{meta?.placeName || 'a city network'}</strong>. Fixed and Greedy run on its real roads; press Run to compare them.{' '}
+              {signedIn ? <Link to="/network">Choose another area</Link> : 'Sign in to choose an area of your own.'}
+            </PageIntro>
+          </div>
           <div className={styles.mapToolbar}>
             <span>Roads</span>
             <Segmented options={{ straight: 'Straight', real: 'Real shape' }} value={shape} onChange={setShape} />
